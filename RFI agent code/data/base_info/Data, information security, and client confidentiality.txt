@@ -1,0 +1,161 @@
+Data, information security, and client confidentiality
+Skip to main content
+SharePoint
+
+
+Elakiya Sivakumar
+ES
+Sign in
+SharePoint start page
+My sites
+My news
+My files
+My lists
+Create
+ASK! RFI
+
+Home
+Notebook
+Documents
+Pages
+Site contents
+Recycle bin
+Edit
+Create
+
+Promote
+Page details
+Preview
+
+Immersive reader
+Analytics
+Published on 2/10/2026
+
+Share
+
+
+
+Edit
+Corporate response database ii
+Data, information security, and client confidentiality
+This section includes:
+
+Data retention
+
+Information security and data protection
+
+Client confidentiality
+Data retention
+1. Do you have a policy and / or process for archiving and retaining digital and physical data, to ensure that any defined retention periods and deletion / destruction requirements can be actioned?
+Yes. At project start up and shut down, data is identified for retention or destruction, and user access is only provided to those that require it for the duration of any project.
+Source: Recent RFI Response Oct '25
+Subject owner(s): Alex Stevens
+Information security and data protection
+1.  Does your company have an established governance structure in place with respect to data privacy and security which will ensure that the customer is able to comply with its legal requirements under applicable data privacy laws and regulations?
+Yes. Avalere Health is fully compliant with data privacy laws including EU GDPR and UK DPA, we have procedures in place to cover breach reporting and new uses of personal data, and risk assessments are reviewed and updated at least annually. Data privacy is overseen by the Chief Legal & Compliance Officer.
+Source: Recent RFI Response Oct '25.
+Subject owner(s):
+2.  Does your company or a supplier authorized representative/ sub-processor hold independent security accreditation from recognized industry groups? (for example ISO27001)?
+Yes - our ISO27001 certified ISMS protects information through a comprehensive data security framework that combines technical, administrative, and physical safeguards. Access to information is restricted based on role and business need, using authentication, authorization, and encryption controls to ensure confidentiality and integrity. Data is encrypted both in transit and at rest, and systems are monitored continuously for unauthorized access or anomalous activity. Regular security assessments, staff training, and adherence to industry standards and other applicable regulations (including GDPR) ensure that all information is managed and protected to the highest standards of security and compliance.
+Source: Combination of recent Recent RFI Responses Oct '25.
+Subject owner(s):
+3. Please describe your data security protocols to ensure client data is held securely and not shared outside of the immediate project team.
+Standard answer.
+Information is protected through a comprehensive data security framework that combines technical, administrative, and physical safeguards. Access to information is restricted based on role and business need, using authentication, authorization, and encryption controls to ensure confidentiality and integrity. Data is encrypted both in transit and at rest, and systems are monitored continuously for unauthorized access or anomalous activity. Regular security assessments, staff training, and adherence to industry standards (such as ISO 27001, GDPR, and other applicable regulations) ensure that all information is managed and protected to the highest standards of security and compliance.
+Long answer.
+We take the confidentiality of client data very seriously and we apply diligent and rigorous processes to ensure that we are protecting confidential client information at all times.
+Avalere Health is compliant with General Data Protection Regulation (GDPR) and the UK Data Protection Act. All Avalere Health employees are trained on data protection. Each team handling personal data ensures that it is handled and processed in accordance with Avalere Health’s governing policy and data protection legislation including GDPR.
+https://avalerehealth.com/privacy-policy/
+To protect data at rest, databases, file repositories, and storage devices are protected using strong encryption and complex passwords.
+We follow role-based and “least privileged” access standards and ensure passwords are never shared between individuals.
+We follow the “minimum necessary” principle for access and data. We maintain audit logs for storing sensitive data, which are routinely monitored.
+Sensitive personal data and client-sensitive data or documents are always transferred using a secure File Transfer Protocol (SFTP) or other encrypted channels. Remote access to systems is established over a virtual private network (VPN).
+It is prohibited for any user to utilize a mass storage device to house Avalere Health’s or a client’s data.  If the use of a storage device is needed, the device must follow cryptographic control standards and the encryption key / password must be communicated separately and not stored with the device.
+Firewalls are contractual, electronic, and physical. All employees sign confidentiality agreements as part of their contracts and are only given access to client confidential information as required for the performance of their duties. Electronic firewalls comprise of complex, dynamic access management on a positive access basis. Access can be restricted at a business unit, company, and project level as required. Physical firewalls protect instances in which teams in the same geographic location provide services to competing clients. Office environments are designed to ensure no inadvertent sharing of materials can take place, including physical separation, secure printing, a clear desk policy, separate meeting rooms, privacy screens, and a code of conduct for staff.
+Both our central compliance team and business unit leaders are responsible and accountable for maintaining these critical protections. Whilst we are united as a single organization, we value the need to maintain strict separations in order to safeguard sensitive information at all times.
+We recommend clients engage with our information technology security and compliance teams to ensure all requirements are met, particularly those that may be client specific.
+We will always partner with our client’s legal and security teams to ensure all solutions always meet the provided client standards.
+Source: Recent RFI Responses Feb '26.
+Subject owner(s): Alex Stevens; Jennifer Krezel
+4. Does your company have a process in place to ensure compliance with cross-border transfer of personal information which includes identification and execution of appropriate transfer mechanisms and Data Processing Agreements as required by applicable laws?
+Yes.
+Source: Recent RFI Responses Oct '25.
+Subject owner(s):
+5.  In the last five years has your company suffered a loss, leak and/or unauthorized access to Personal Data or had an enquiry or investigation by relevant supervisory authorities (or your existing customers) for breach of information handling?
+No.
+Source: Recent RFI Responses Oct '25.
+Subject owner(s):
+6.
+Has your company established an incident response plan that addresses incidents involving Personal Data and which involves notifying the customer?
+Yes.
+Source: Recent RFI Response Oct '25.
+Subject owner(s):
+7.
+Does the organization identify, document, and implement acceptable use rules for information and assets?
+Yes.
+Source: Recent RFI Response Oct '25.
+Subject owner(s):
+8.
+Is user access to all IT assets / devices (including applications and systems) monitored and provisioned by the organization?
+Yes.
+Source: Recent RFI Response Oct '25.
+Subject owner(s):
+9.
+Does the organization have a clear policy or recognized practice governing the use of removable media?
+Yes - All removable media is restricted from access USB ports on endpoint devices, other than in specific circumstances where there is a critical need for access.
+Source: Recent RFI Response Oct '25.
+Subject owner(s):
+10.
+Does the organization identify and document all relevant legislative, statutory, regulatory, and contractual requirements pertaining to your services offered to clients (ex. ISO, GxP, etc) or your Information Technology/Security environment?
+Yes
+Source: Recent RFI Response Oct '25.
+Subject owner(s):
+11.
+Have information security roles (capabilities and decision rights) been defined for internal and external users?
+Yes
+Source: Recent RFI Response Oct '25.
+Subject owner(s):
+12.
+Are security education, training and awareness programs conducted annually for all users and covers social engineering and phishing attacks?
+Yes
+Source: Recent RFI Response Oct '25.
+Subject owner(s):
+13.
+Does the organization perform information security risk assessments at planned intervals or when significant changes are proposed, and / or internal security audits?
+Yes - risk assessments are recurring. Audits are annual, and our security program is also assessed annually.
+Source: Recent RFI Response Oct '25.
+Subject owner(s):
+14.  Is a firewall installed at all connections from an internal network to other internal or external networks?
+Yes.
+Source: Recent RFI Response Oct '25.
+Subject owner(s):
+15.  Does the organization regularly test the backup copies of information, software and system images in accordance with an agreed backup policy?
+Yes.
+Source: Recent RFI Response Oct '25.
+Subject owner(s):
+16.  Is electronic data encrypted at rest (network storage, backups, etc.)?
+Yes.
+Source: Recent RFI Response Oct '25.
+Subject owner(s):
+17.  Is electronic data encrypted in transit (TLS enabled for emails, etc.)?
+Yes.
+Source: Recent RFI Response Oct '25.
+Subject owner(s):
+Client Confidentiality
+1.
+Have you had any significant incidents relating to breach of confidentiality and/or non-permitted communications in the past 5 years?
+No.
+Source(s): Recent RFI Response Oct ’25
+Subject owner(s):
+2.
+Do you have policies and/or processes that relate to the protection and governance of confidential information and/or the communication of product specific and scientific information?
+Yes.
+Source(s): Recent RFI Response Oct ’25
+Subject owner(s):
+3.  Is there a formal process to report and manage confidentiality related and/or non-permitted communication incidents?
+Yes.
+Source(s): Recent RFI Response Oct ’25
+Subject owner(s):
+ASK! RFI
+More
+Published on 2/10/2026

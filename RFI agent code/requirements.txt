@@ -1,0 +1,15 @@
+anthropic
+openpyxl
+pymupdf
+beautifulsoup4
+pandas
+click
+python-dotenv
+azure-search-documents
+azure-identity
+openai
+rich
+fastapi
+uvicorn[standard]
+sse-starlette
+python-multipart

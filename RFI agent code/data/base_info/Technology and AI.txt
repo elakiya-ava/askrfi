@@ -1,0 +1,113 @@
+ASK! RFI
+Technology and AI
+This section includes:
+
+Entity information
+
+Company ownership and overview
+
+Employees and geography
+Artificial Intelligence
+[]
+5/11/26, 12:58 PM
+Technology and AI
+https://avalerehealtheur.sharepoint.com/sites/ASK/ASKRFI/SitePages/Technology-and-AI.aspx
+1/5
+
+
+We operate at an advanced AI maturity level, progressing toward enterprise level
+transformation and a fully-integrated ecosystem. Our AI functionality is underpinned
+by Sense AI, an internal, secure and modular platform that allows all teams to
+perform scaleable and repeatable tasks across multiple workflows, augmented by a
+suite of best-in-class tools to elevate delivery in all Capabilities. Alongside, our Sense
+ecosystem now offers a range of AI-first products and tools directly accessible to
+clients. We have established a global governance framework and through data
+integration and process standardization are rapidly accelerating AI integration into
+all systems over the next 12 months. 
+ 
+Source: AS draft UNVERIFIED Apr '26
+ 
+2. Describe your AI strategy and organizational approach.
+At Avalere Health, intelligence and innovation begin with people. Our curiosity,
+creativity, and experience have shaped the way health decisions are understood and
+communicated. Our approach to AI is centered around co-intelligence. Co-
+intelligence unlocks the full potential of our people by empowering experts with an
+integrated and compliant AI toolkit, allowing us to amplify our capabilities, scale our
+solutions, enhance quality, and deliver measurable value to our clients, partners, and
+patients. Our approach is focused both on developing AI-first products and tools
+directly accessible by clients as well as internal solutions and training to elevate and
+transform the way our experts deliver their work. 
+ 
+ 
+Source: Combination of recent RFI responses late '25
+Owner: Claudia Federico
+1. How would you classify your AI maturity level? Please describe.
+5/11/26, 12:58 PM
+Technology and AI
+https://avalerehealtheur.sharepoint.com/sites/ASK/ASKRFI/SitePages/Technology-and-AI.aspx
+2/5
+
+
+2. What are your AI investment priorities and roadmap over the next 2-3
+years.
+Our AI roadmap is focused on moving from partial, departmental adoption to a fully
+integrated co-intelligence model with clear client and operational impact. 
+Scaling Sense AI to achieve enterprise-wide adoption
+Embedding AI into all core workflows across Medical, and Marketing, and
+Advisory
+Expanding agentic AI solutions for economic modelling, insight generation, and
+automated workflows
+Integrating data infrastructure to enable connected, real-time intelligence
+Continuing to upskill teams in AI literary and strengthen governance frameworks
+ 
+Source: AS draft UNVERIFIED Apr'26
+3. What AI tools, platforms, or models do you use (proprietary and/or
+third-party?)
+AI is embedded across our workflow through our secure Sense AI ecosystem, a
+modular LLM framework. 
+Enterprise AI tools in use: ChatGPT Enterprise, Claude, Microsoft Copilot
+[Incomplete]
+4. For what deliverables do you currently use AI?
+Where permitted by client agreement, AI tools now play a critical role in a wide
+range of deliverables, including:
+Insight generation and landscape analysis
+Medical and scientific content development
+Patient journey mapping and persona development
+5/11/26, 12:58 PM
+Technology and AI
+https://avalerehealtheur.sharepoint.com/sites/ASK/ASKRFI/SitePages/Technology-and-AI.aspx
+3/5
+
+
+HEOR and modelling
+Competitive intelligence and policy analysis
+Omnichannel 
+5. Describe how you have used AI to improve scalability and operational
+capacity?
+6. Do you have a dedicated AI team or Center of Excellence? Describe its
+structure and responsibilities
+7. What measures are in place to identify and comply with regulatory
+restrictions for AI use? 
+8. How do you validate AI-generated deliverables and ensure their
+accuracy and reliability?
+AI is used as an enabler rather than a replacement. All outputs are guided, reviewed
+and refined by our multidisciplinary teams, ensuring that content remains insightful,
+empathetic and impactful. By removing friction and repetitive tasks, AI allows our
+people to focus on higher-value thinking and delivering meaningful outcomes for
+the products. We provide continual feedback loops on accuracy, clarity, relevance,
+quality, precision, completeness, hallucinations and faithfulness, and report on
+operational evolution and process efficiencies.
+5/11/26, 12:58 PM
+Technology and AI
+https://avalerehealtheur.sharepoint.com/sites/ASK/ASKRFI/SitePages/Technology-and-AI.aspx
+4/5
+
+
+9. Describe your AI governance framework.
+10. How do you ensure client data protection when using AI tools?
+[]
+.
+5/11/26, 12:58 PM
+Technology and AI
+https://avalerehealtheur.sharepoint.com/sites/ASK/ASKRFI/SitePages/Technology-and-AI.aspx
+5/5
