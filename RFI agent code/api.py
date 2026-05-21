@@ -481,6 +481,32 @@ async def download_csv(session_id: str):
     )
 
 
+@app.get("/api/download-pdf/{session_id}")
+async def download_pdf(session_id: str):
+    """
+    Generate and download the filled RFI as PDF.
+    """
+    session = _sessions.get(session_id)
+    if not session:
+        raise HTTPException(404, "Session not found")
+
+    if session["status"] not in ("filled", "reviewed"):
+        raise HTTPException(400, "Questions must be filled before download")
+
+    output_path = _generate_pdf(
+        session["questions"],
+        session["file_name"],
+        session["client_name"],
+    )
+    basename = Path(session["file_name"]).stem
+
+    return FileResponse(
+        output_path,
+        media_type="application/pdf",
+        filename=f"{basename}_FILLED.pdf",
+    )
+
+
 @app.get("/api/session/{session_id}")
 async def get_session(session_id: str):
     """Get current session state (questions + status)."""

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import Upload from './components/Upload'
 import QuestionsTable from './components/QuestionsTable'
 import './App.css'
@@ -79,9 +79,12 @@ function App() {
   const handleDownload = async (format = 'excel') => {
     if (!sessionId) return
     try {
-      const endpoint = format === 'csv'
-        ? `${API_BASE}/api/download-csv/${sessionId}`
-        : `${API_BASE}/api/download/${sessionId}`
+      const endpoints = {
+        csv: `${API_BASE}/api/download-csv/${sessionId}`,
+        pdf: `${API_BASE}/api/download-pdf/${sessionId}`,
+        excel: `${API_BASE}/api/download/${sessionId}`,
+      }
+      const endpoint = endpoints[format] || endpoints.excel
       const res = await fetch(endpoint)
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: 'Download failed' }))
@@ -92,11 +95,14 @@ function App() {
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
+      const stem = fileName.replace(/\.(xlsx|xlsm)$/i, '')
       if (format === 'csv') {
-        a.download = fileName.replace(/\.(xlsx|xlsm)$/i, '') + '_FILLED.csv'
+        a.download = stem + '_FILLED.csv'
+      } else if (format === 'pdf') {
+        a.download = stem + '_FILLED.pdf'
       } else {
         const ext = fileName.match(/\.(xlsx|xlsm)$/i)?.[0] || '.xlsx'
-        a.download = fileName.replace(/\.(xlsx|xlsm)$/i, '') + '_FILLED' + ext
+        a.download = stem + '_FILLED' + ext
       }
       document.body.appendChild(a)
       a.click()
@@ -141,14 +147,7 @@ function App() {
                 </button>
               )}
               {!isProcessing && allFilled && (
-                <>
-                  <button className="btn-download" onClick={() => handleDownload('excel')}>
-                    ⬇ Download Excel
-                  </button>
-                  <button className="btn-download btn-csv" onClick={() => handleDownload('csv')}>
-                    ⬇ Download CSV
-                  </button>
-                </>
+                <DownloadDropdown onDownload={handleDownload} />
               )}
               <button className="btn-reset" onClick={handleReset}>
                 ✕ New File
@@ -157,6 +156,39 @@ function App() {
           </div>
           <QuestionsTable questions={questions} />
         </div>
+      )}
+    </div>
+  )
+}
+
+function DownloadDropdown({ onDownload }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  const handleSelect = (format) => {
+    setOpen(false)
+    onDownload(format)
+  }
+
+  return (
+    <div className="download-dropdown" ref={ref}>
+      <button className="btn-download" onClick={() => setOpen(!open)}>
+        ⬇ Download ▾
+      </button>
+      {open && (
+        <ul className="download-menu">
+          <li onClick={() => handleSelect('excel')}>📊 Excel (.xlsx)</li>
+          <li onClick={() => handleSelect('csv')}>📄 CSV (.csv)</li>
+          <li onClick={() => handleSelect('pdf')}>📑 PDF (.pdf)</li>
+        </ul>
       )}
     </div>
   )

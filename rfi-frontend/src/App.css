@@ -193,6 +193,54 @@ body {
   color: var(--danger);
 }
 
+/* === DOWNLOAD DROPDOWN === */
+.download-dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.btn-download {
+  padding: 8px 20px;
+  background: var(--primary);
+  color: white;
+  border: none;
+  border-radius: var(--radius);
+  font-weight: 500;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.2s;
+}
+
+.btn-download:hover {
+  background: var(--primary-hover);
+}
+
+.download-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 160px;
+  background: var(--card-bg, #fff);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+  z-index: 100;
+}
+
+.download-menu li {
+  padding: 8px 14px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.15s;
+}
+
+.download-menu li:hover {
+  background: var(--hover-bg, #f0f4ff);
+}
+
 /* === TABLE === */
 .table-container {
   display: flex;
