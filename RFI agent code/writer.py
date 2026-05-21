@@ -71,60 +71,75 @@ def write_filled_rfi(
 
         ws = wb[sheet_name]
 
-        # Find or create the confidence column
-        # Use the column after the answer column, or the last used column + 1
-        answer_cols = set(q.get("answer_col") for q in sheet_qs if q.get("answer_col"))
-        if answer_cols:
-            # Use the first answer column found
-            ans_col_letter = list(answer_cols)[0]
-            ans_col_num = openpyxl.utils.column_index_from_string(ans_col_letter)
-            conf_col_num = ans_col_num + 1
-        else:
-            conf_col_num = (ws.max_column or 1) + 1
+        # Standardized output layout (always left to right):
+        # [existing columns] → AI Answer → AI Confidence → Citation
+        # Place new columns after the last used column to avoid overwriting
+        last_col = ws.max_column or 1
+        ans_col_num = last_col + 1
+        conf_col_num = last_col + 2
+        cite_col_num = last_col + 3
 
+        ans_col_letter = get_column_letter(ans_col_num)
         conf_col_letter = get_column_letter(conf_col_num)
+        cite_col_letter = get_column_letter(cite_col_num)
 
-        # Add confidence header
-        # Find the header row (first row with questions for this sheet)
+        # Write headers
         min_row = min(q["row"] for q in sheet_qs)
         header_row = max(1, min_row - 1)
 
         try:
-            conf_header_cell = ws[f"{conf_col_letter}{header_row}"]
-            conf_header_cell.value = "AI Confidence"
-            conf_header_cell.fill = FILL_HEADER
-            conf_header_cell.font = FONT_HEADER
-            conf_header_cell.alignment = Alignment(horizontal="center")
+            h = ws[f"{ans_col_letter}{header_row}"]
+            h.value = "AI Answer"
+            h.fill = FILL_HEADER
+            h.font = FONT_HEADER
+            h.alignment = Alignment(horizontal="left", wrap_text=True)
         except (AttributeError, TypeError):
-            pass  # Skip if merged
+            pass
 
-        # Write answers and confidence scores
+        try:
+            h = ws[f"{conf_col_letter}{header_row}"]
+            h.value = "AI Confidence"
+            h.fill = FILL_HEADER
+            h.font = FONT_HEADER
+            h.alignment = Alignment(horizontal="center")
+        except (AttributeError, TypeError):
+            pass
+
+        try:
+            h = ws[f"{cite_col_letter}{header_row}"]
+            h.value = "Citation"
+            h.fill = FILL_HEADER
+            h.font = FONT_HEADER
+            h.alignment = Alignment(horizontal="left")
+        except (AttributeError, TypeError):
+            pass
+
+        # Write data rows: Answer → Confidence → Citation
         for q in sheet_qs:
             row = q["row"]
             answer = q.get("generated_answer", "")
             confidence = q.get("confidence", 0)
+            citation = q.get("citation", "")
 
             try:
-                # Write answer (only if we generated one and the cell is currently empty or we're more confident)
-                if answer and q.get("answer_col"):
-                    answer_cell = ws[f"{q['answer_col']}{row}"]
-                    # Only overwrite if the cell is empty or the existing answer is short/placeholder
-                    existing = str(answer_cell.value or "").strip()
-                    if not existing or existing.lower() in ("", "n/a", "tbd", "pending"):
-                        answer_cell.value = answer
-                        answer_cell.fill = _confidence_fill(confidence)
-                    elif answer and not answer.startswith("[ERROR]"):
-                        # Cell already has an answer — keep existing, just add color
-                        answer_cell.fill = _confidence_fill(min(confidence, 0.95))
+                # AI Answer
+                ans_cell = ws[f"{ans_col_letter}{row}"]
+                ans_cell.value = answer or ""
+                ans_cell.fill = _confidence_fill(confidence)
+                ans_cell.alignment = Alignment(wrap_text=True)
 
-                # Write confidence score
+                # AI Confidence
                 conf_cell = ws[f"{conf_col_letter}{row}"]
                 conf_cell.value = round(confidence, 2)
                 conf_cell.fill = _confidence_fill(confidence)
                 conf_cell.alignment = Alignment(horizontal="center")
                 conf_cell.number_format = "0%"
+
+                # Citation
+                cite_cell = ws[f"{cite_col_letter}{row}"]
+                cite_cell.value = citation or ""
+                cite_cell.alignment = Alignment(horizontal="left", wrap_text=True)
             except (AttributeError, TypeError):
-                # Skip merged cells or other non-writable cells
                 continue
 
     wb.save(output_path)
