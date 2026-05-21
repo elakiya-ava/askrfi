@@ -52,8 +52,10 @@ def write_filled_rfi(
     shutil.copy2(source_path, output_path)
 
     # Open the copy for editing (NOT read-only)
-    # keep_vba=True preserves macros in .xlsm files
-    wb = openpyxl.load_workbook(output_path, keep_vba=True)
+    # keep_vba=True only for .xlsm files (preserves macros);
+    # .xlsx files must NOT contain VBA or Excel will reject them
+    is_macro_file = ext.lower() == ".xlsm"
+    wb = openpyxl.load_workbook(output_path, keep_vba=is_macro_file)
 
     # Group questions by sheet
     by_sheet = {}
@@ -87,11 +89,14 @@ def write_filled_rfi(
         min_row = min(q["row"] for q in sheet_qs)
         header_row = max(1, min_row - 1)
 
-        conf_header_cell = ws[f"{conf_col_letter}{header_row}"]
-        conf_header_cell.value = "AI Confidence"
-        conf_header_cell.fill = FILL_HEADER
-        conf_header_cell.font = FONT_HEADER
-        conf_header_cell.alignment = Alignment(horizontal="center")
+        try:
+            conf_header_cell = ws[f"{conf_col_letter}{header_row}"]
+            conf_header_cell.value = "AI Confidence"
+            conf_header_cell.fill = FILL_HEADER
+            conf_header_cell.font = FONT_HEADER
+            conf_header_cell.alignment = Alignment(horizontal="center")
+        except (AttributeError, TypeError):
+            pass  # Skip if merged
 
         # Write answers and confidence scores
         for q in sheet_qs:
@@ -99,24 +104,28 @@ def write_filled_rfi(
             answer = q.get("generated_answer", "")
             confidence = q.get("confidence", 0)
 
-            # Write answer (only if we generated one and the cell is currently empty or we're more confident)
-            if answer and q.get("answer_col"):
-                answer_cell = ws[f"{q['answer_col']}{row}"]
-                # Only overwrite if the cell is empty or the existing answer is short/placeholder
-                existing = str(answer_cell.value or "").strip()
-                if not existing or existing.lower() in ("", "n/a", "tbd", "pending"):
-                    answer_cell.value = answer
-                    answer_cell.fill = _confidence_fill(confidence)
-                elif answer and not answer.startswith("[ERROR]"):
-                    # Cell already has an answer — keep existing, just add color
-                    answer_cell.fill = _confidence_fill(min(confidence, 0.95))
+            try:
+                # Write answer (only if we generated one and the cell is currently empty or we're more confident)
+                if answer and q.get("answer_col"):
+                    answer_cell = ws[f"{q['answer_col']}{row}"]
+                    # Only overwrite if the cell is empty or the existing answer is short/placeholder
+                    existing = str(answer_cell.value or "").strip()
+                    if not existing or existing.lower() in ("", "n/a", "tbd", "pending"):
+                        answer_cell.value = answer
+                        answer_cell.fill = _confidence_fill(confidence)
+                    elif answer and not answer.startswith("[ERROR]"):
+                        # Cell already has an answer — keep existing, just add color
+                        answer_cell.fill = _confidence_fill(min(confidence, 0.95))
 
-            # Write confidence score
-            conf_cell = ws[f"{conf_col_letter}{row}"]
-            conf_cell.value = round(confidence, 2)
-            conf_cell.fill = _confidence_fill(confidence)
-            conf_cell.alignment = Alignment(horizontal="center")
-            conf_cell.number_format = "0%"
+                # Write confidence score
+                conf_cell = ws[f"{conf_col_letter}{row}"]
+                conf_cell.value = round(confidence, 2)
+                conf_cell.fill = _confidence_fill(confidence)
+                conf_cell.alignment = Alignment(horizontal="center")
+                conf_cell.number_format = "0%"
+            except (AttributeError, TypeError):
+                # Skip merged cells or other non-writable cells
+                continue
 
     wb.save(output_path)
     wb.close()

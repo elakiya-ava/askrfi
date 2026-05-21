@@ -6,6 +6,7 @@ Exposes the pipeline (parse → fill → review → download) over HTTP.
 import asyncio
 import json
 import os
+import random
 import tempfile
 import uuid
 from dataclasses import asdict
@@ -43,6 +44,91 @@ _sessions: dict[str, dict] = {}
 
 UPLOAD_DIR = Path(tempfile.gettempdir()) / "rfi_agent_uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
+
+
+def _sanitize_for_pdf(text: str) -> str:
+    """Replace non-latin1 characters so Helvetica can render them."""
+    replacements = {
+        "\u2013": "-", "\u2014": "-", "\u2018": "'", "\u2019": "'",
+        "\u201c": '"', "\u201d": '"', "\u2026": "...", "\u2022": "-",
+        "\u00a0": " ", "\u2010": "-", "\u2011": "-", "\u2012": "-",
+        "\u200b": "", "\ufeff": "",
+    }
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+    # Fallback: encode to latin-1, replacing anything still unsupported
+    return text.encode("latin-1", errors="replace").decode("latin-1")
+
+
+def _generate_pdf(questions: list[dict], file_name: str, client_name: str) -> str:
+    """Generate a PDF report of filled RFI questions."""
+    from fpdf import FPDF
+
+    pdf = FPDF()
+    pdf.set_auto_page_break(auto=True, margin=20)
+    pdf.add_page()
+
+    # Title
+    pdf.set_font("Helvetica", "B", 16)
+    pdf.cell(0, 10, "RFI Agent - Filled Responses", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("Helvetica", "", 10)
+    pdf.cell(0, 6, _sanitize_for_pdf(f"Source: {file_name}"), new_x="LMARGIN", new_y="NEXT")
+    if client_name:
+        pdf.cell(0, 6, _sanitize_for_pdf(f"Client: {client_name}"), new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 6, f"Questions: {len(questions)}", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(8)
+
+    # Group by sheet
+    sheets = {}
+    for q in questions:
+        sheet = q.get("sheet_name", "Unknown")
+        if sheet not in sheets:
+            sheets[sheet] = []
+        sheets[sheet].append(q)
+
+    for sheet_name, sheet_qs in sheets.items():
+        # Sheet header
+        pdf.set_font("Helvetica", "B", 13)
+        pdf.set_fill_color(68, 114, 196)
+        pdf.set_text_color(255, 255, 255)
+        pdf.cell(0, 8, _sanitize_for_pdf(f"  {sheet_name}"), fill=True, new_x="LMARGIN", new_y="NEXT")
+        pdf.set_text_color(0, 0, 0)
+        pdf.ln(4)
+
+        for i, q in enumerate(sheet_qs, 1):
+            confidence = q.get("confidence") or 0
+            answer = q.get("generated_answer", "")
+            citation = q.get("citation", "")
+
+            # Question
+            pdf.set_font("Helvetica", "B", 10)
+            q_text = _sanitize_for_pdf(f"Q{i}: {q.get('question_text', '')}")
+            pdf.multi_cell(0, 5, q_text, new_x="LMARGIN", new_y="NEXT")
+
+            # Answer with confidence color
+            if confidence >= 0.8:
+                pdf.set_fill_color(198, 239, 206)  # green
+            elif confidence >= 0.5:
+                pdf.set_fill_color(255, 235, 156)  # yellow
+            else:
+                pdf.set_fill_color(255, 199, 206)  # red
+
+            pdf.set_font("Helvetica", "", 9)
+            pdf.multi_cell(0, 5, _sanitize_for_pdf(answer) or "[No answer generated]", fill=True, new_x="LMARGIN", new_y="NEXT")
+
+            # Confidence + citation
+            pdf.set_font("Helvetica", "I", 8)
+            pdf.set_text_color(100, 100, 100)
+            meta = f"Confidence: {int(confidence * 100)}%"
+            if citation:
+                meta += f"  |  Source: {_sanitize_for_pdf(citation)}"
+            pdf.cell(0, 5, meta, new_x="LMARGIN", new_y="NEXT")
+            pdf.set_text_color(0, 0, 0)
+            pdf.ln(4)
+
+    output_path = str(UPLOAD_DIR / f"{Path(file_name).stem}_FILLED.pdf")
+    pdf.output(output_path)
+    return output_path
 
 
 # ─── ROUTES ─────────────────────────────────────────────────────────────────
@@ -194,6 +280,86 @@ async def fill_questions(session_id: str):
     return EventSourceResponse(event_generator())
 
 
+_MOCK_ANSWERS = [
+    "Avalere Health is a strategic advisory company within Inizio, specializing in market access, policy, reimbursement, and evidence-based solutions for life sciences companies. Founded in 2000, headquartered in Washington, D.C., with offices in London, Manchester, New York, Dublin, Athens, and Singapore.",
+    "Yes, Avalere Health maintains SOC 2 Type II certification and complies with GDPR requirements for all EU data subjects. Annual third-party audits are conducted by independent assessors.",
+    "Avalere employs approximately 350 full-time staff globally with an attrition rate of 12% (2024). All staff complete mandatory compliance training annually including anti-bribery, data protection, and pharmacovigilance modules.",
+    "Our anti-bribery and anti-corruption policy aligns with the UK Bribery Act 2010 and US FCPA. Annual training is mandatory for all employees. We maintain a gifts and hospitality register reviewed quarterly.",
+    "Avalere maintains a Business Continuity Plan (BCP) tested annually. RPO: 4 hours, RTO: 24 hours for critical systems. All data backed up to geographically redundant Azure regions.",
+    "Our Medical team has over 300 full-time team members located in the UK, Ireland, Greece and North America. Over 70% of our scientific staff hold life sciences doctorates, and over 60% have more than 10 years' experience.",
+    "Avalere Health holds ISO 27001:2022 certification for information security management. Penetration testing is conducted bi-annually by CREST-certified third parties.",
+    "[NEEDS REVIEW] Insufficient context to answer this question confidently. Please consult the relevant internal documentation or subject matter expert.",
+]
+
+_MOCK_CITATIONS = [
+    "Company Information.html § Overview",
+    "Compliance.html § SOC 2 Certification",
+    "People Information.html § Headcount & Retention",
+    "Compliance.html § Anti-Bribery Policy",
+    "Data, information security.html § Business Continuity",
+    "People Information.html § Medical Team",
+    "Data, information security.html § ISO 27001",
+    "",
+]
+
+
+@app.get("/api/fill-mock/{session_id}")
+async def fill_questions_mock(session_id: str):
+    """
+    Mock fill — returns dummy answers via SSE without calling any LLM.
+    Used for demo / development when APIs aren't configured.
+    """
+    session = _sessions.get(session_id)
+    if not session:
+        raise HTTPException(404, "Session not found")
+
+    if session["status"] == "filling":
+        raise HTTPException(409, "Fill already in progress")
+
+    session["status"] = "filling"
+
+    async def event_generator():
+        questions = session["questions"]
+        total = len(questions)
+
+        # Simulate filling with random delays
+        indices = list(range(total))
+        random.shuffle(indices)
+
+        for i, idx in enumerate(indices):
+            # Small delay to simulate processing (10-50ms per question)
+            await asyncio.sleep(random.uniform(0.01, 0.05))
+
+            confidence = round(random.uniform(0.55, 0.98), 2)
+            answer = random.choice(_MOCK_ANSWERS)
+            citation = random.choice(_MOCK_CITATIONS)
+
+            questions[idx]["generated_answer"] = answer
+            questions[idx]["confidence"] = confidence
+            questions[idx]["citation"] = citation
+            questions[idx]["fill_status"] = "filled"
+            questions[idx]["status"] = "filled"
+
+            yield {
+                "event": "progress",
+                "data": json.dumps({
+                    "index": idx,
+                    "status": "filled",
+                    "generated_answer": answer,
+                    "confidence": confidence,
+                    "citation": citation,
+                }),
+            }
+
+        session["status"] = "filled"
+        yield {
+            "event": "done",
+            "data": json.dumps({"filled": total}),
+        }
+
+    return EventSourceResponse(event_generator())
+
+
 @app.post("/api/review/{session_id}")
 async def run_review(session_id: str):
     """
@@ -225,7 +391,7 @@ async def run_review(session_id: str):
 @app.get("/api/download/{session_id}")
 async def download_filled(session_id: str):
     """
-    Generate and download the filled Excel file.
+    Generate and download the filled RFI as Excel (.xlsm/.xlsx) or CSV.
     """
     session = _sessions.get(session_id)
     if not session:
@@ -244,12 +410,56 @@ async def download_filled(session_id: str):
         raise HTTPException(500, f"Failed to generate filled file: {e}")
 
     basename = Path(session["file_name"]).stem
-    ext = Path(session["file_name"]).suffix
+    ext = Path(session["file_name"]).suffix.lower()
+
+    if ext == ".xlsm":
+        media_type = "application/vnd.ms-excel.sheet.macroEnabled.12"
+    else:
+        media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
     return FileResponse(
         output_path,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        media_type=media_type,
         filename=f"{basename}_FILLED{ext}",
+    )
+
+
+@app.get("/api/download-csv/{session_id}")
+async def download_csv(session_id: str):
+    """
+    Generate and download the filled RFI as CSV.
+    """
+    import csv
+    import io
+
+    session = _sessions.get(session_id)
+    if not session:
+        raise HTTPException(404, "Session not found")
+
+    if session["status"] not in ("filled", "reviewed"):
+        raise HTTPException(400, "Questions must be filled before download")
+
+    questions = session["questions"]
+    basename = Path(session["file_name"]).stem
+    output_path = str(UPLOAD_DIR / f"{basename}_FILLED.csv")
+
+    with open(output_path, "w", newline="", encoding="utf-8-sig") as f:
+        writer = csv.writer(f)
+        writer.writerow(["Sheet", "Row", "Question", "Answer", "Confidence", "Citation"])
+        for q in questions:
+            writer.writerow([
+                q.get("sheet_name", ""),
+                q.get("row", ""),
+                q.get("question_text", ""),
+                q.get("generated_answer", ""),
+                f"{int((q.get('confidence') or 0) * 100)}%",
+                q.get("citation", ""),
+            ])
+
+    return FileResponse(
+        output_path,
+        media_type="text/csv",
+        filename=f"{basename}_FILLED.csv",
     )
 
 

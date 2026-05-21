@@ -26,8 +26,8 @@ function App() {
     // Mark all as filling
     setQuestions(prev => prev.map(q => ({ ...q, status: 'filling' })))
 
-    // Connect to SSE stream
-    const evtSource = new EventSource(`${API_BASE}/api/fill/${sessionId}`)
+    // Connect to SSE stream (use mock fill for demo)
+    const evtSource = new EventSource(`${API_BASE}/api/fill-mock/${sessionId}`)
 
     evtSource.addEventListener('progress', (e) => {
       const data = JSON.parse(e.data)
@@ -76,17 +76,35 @@ function App() {
     }
   }
 
-  const handleDownload = async () => {
+  const handleDownload = async (format = 'excel') => {
     if (!sessionId) return
-    const res = await fetch(`${API_BASE}/api/download/${sessionId}`)
-    if (!res.ok) return
-    const blob = await res.blob()
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = fileName.replace(/\.(xlsx|xlsm)$/i, '_FILLED.$1')
-    a.click()
-    URL.revokeObjectURL(url)
+    try {
+      const endpoint = format === 'csv'
+        ? `${API_BASE}/api/download-csv/${sessionId}`
+        : `${API_BASE}/api/download/${sessionId}`
+      const res = await fetch(endpoint)
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: 'Download failed' }))
+        alert(err.detail || 'Download failed')
+        return
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      if (format === 'csv') {
+        a.download = fileName.replace(/\.(xlsx|xlsm)$/i, '') + '_FILLED.csv'
+      } else {
+        const ext = fileName.match(/\.(xlsx|xlsm)$/i)?.[0] || '.xlsx'
+        a.download = fileName.replace(/\.(xlsx|xlsm)$/i, '') + '_FILLED' + ext
+      }
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      alert('Download failed — is the backend running?')
+    }
   }
 
   const handleReset = () => {
@@ -124,11 +142,11 @@ function App() {
               )}
               {!isProcessing && allFilled && (
                 <>
-                  <button className="btn-review" onClick={handleReview}>
-                    🔍 Review
+                  <button className="btn-download" onClick={() => handleDownload('excel')}>
+                    ⬇ Download Excel
                   </button>
-                  <button className="btn-download" onClick={handleDownload}>
-                    ⬇ Download
+                  <button className="btn-download btn-csv" onClick={() => handleDownload('csv')}>
+                    ⬇ Download CSV
                   </button>
                 </>
               )}
