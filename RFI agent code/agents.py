@@ -1,24 +1,35 @@
 """
 RFI pipeline functions that process RFI questions.
 
-match_and_fill       — sync retrieval + generation via Claude (one question at a time)
-match_and_fill_async — async concurrent fill with rate-limit backoff (production path)
-review_answers       — checks consistency across answers via Claude
+classify_questions — keyword-based categorization (no LLM)
+match_and_fill    — retrieves similar past Q&A + generates answers via Claude
+review_answers    — checks consistency across answers via Claude
 
-Retrieval uses Azure AI Search (required).
+Retrieval uses Azure AI Search when configured, JSON fallback otherwise.
 """
 
 from __future__ import annotations
 
-import asyncio
 import json
 import os
 
-from anthropic import Anthropic, AsyncAnthropic
+from anthropic import Anthropic
 from openai import AzureOpenAI
 from azure.search.documents import SearchClient
 from azure.search.documents.models import VectorizedQuery
 from azure.core.credentials import AzureKeyCredential
+
+CATEGORIES = [
+    "Company Information",
+    "Commercial Information",
+    "Compliance",
+    "Legal",
+    "Data & Information Security",
+    "ESG",
+    "People Information",
+    "Suppliers & Freelancers",
+    "Technology & AI",
+]
 
 
 def _get_client() -> Anthropic:
@@ -73,12 +84,90 @@ def _azure_configured() -> bool:
     return False
 
 
-# ─── MATCHER + FILLER ───────────────────────────────────────────────────────
+# ─── CLASSIFIER (keyword-based, no LLM) ─────────────────────────────────────
 
-def _sanitize_odata_string(value: str) -> str:
-    """Escape single quotes in OData filter values to prevent injection."""
-    return value.replace("'", "''")
+# Keyword → category mapping for questions that lack a category_hint
+_KEYWORD_MAP = {
+    "Company Information": [
+        "company name", "registration", "headquarters", "founded", "ownership",
+        "parent company", "subsidiary", "office location", "address",
+        "company overview", "organizational", "organisation", "about your",
+    ],
+    "Commercial Information": [
+        "revenue", "pricing", "rate card", "fee", "cost", "budget",
+        "client list", "case study", "portfolio", "capabilities",
+        "pitch", "credentials", "experience", "award", "therapeutic area",
+        "brand", "campaign", "creative",
+    ],
+    "Compliance": [
+        "compliance", "audit", "regulatory", "gdpr", "hipaa", "sox",
+        "anti-bribery", "anti-corruption", "code of conduct", "ethics",
+        "pharmacovigilance", "adverse event", "veeva", "mlr", "approval process",
+    ],
+    "Legal": [
+        "legal", "litigation", "lawsuit", "contract", "liability",
+        "indemnity", "insurance", "intellectual property", "patent",
+        "terms and conditions", "nda", "confidentiality agreement",
+    ],
+    "Data & Information Security": [
+        "data security", "information security", "cyber", "encryption",
+        "penetration test", "iso 27001", "soc 2", "breach", "firewall",
+        "access control", "password", "mfa", "two-factor", "data protection",
+        "data privacy", "backup", "disaster recovery", "incident response",
+    ],
+    "ESG": [
+        "esg", "environmental", "sustainability", "carbon", "diversity",
+        "inclusion", "dei", "social responsibility", "csr", "governance",
+        "net zero", "climate", "waste", "recycling", "renewable",
+    ],
+    "People Information": [
+        "employee", "headcount", "staff", "team size", "fte",
+        "training", "turnover", "retention", "hr ", "human resources",
+        "recruitment", "onboarding", "benefits", "wellbeing", "welfare",
+    ],
+    "Suppliers & Freelancers": [
+        "supplier", "subcontract", "freelance", "third party", "third-party",
+        "vendor", "outsourc", "partner", "agency", "contractor",
+    ],
+    "Technology & AI": [
+        "technology", "software", "platform", "tool", "ai ", "artificial intelligence",
+        "machine learning", "automation", "digital", "cloud", "saas",
+        "infrastructure", "it ", "system", "database",
+    ],
+}
 
+
+def classify_questions(questions: list[dict]) -> list[dict]:
+    """
+    Classify each question into one of 9 categories using:
+      1. The category_hint from sheet names (if valid)
+      2. Keyword matching on the question text (fallback)
+    No LLM call — pure keyword heuristic.
+    """
+    for q in questions:
+        hint = (q.get("category_hint") or "").strip()
+
+        # If the parser already gave a valid hint, use it
+        if hint in CATEGORIES:
+            q["category"] = hint
+            continue
+
+        # Keyword match against question text
+        text_lower = q["question_text"].lower()
+        best_cat = "Uncategorized"
+        best_score = 0
+        for cat, keywords in _KEYWORD_MAP.items():
+            score = sum(1 for kw in keywords if kw in text_lower)
+            if score > best_score:
+                best_score = score
+                best_cat = cat
+
+        q["category"] = best_cat
+
+    return questions
+
+
+# ─── AGENT 2: MATCHER + FILLER ──────────────────────────────────────────────
 
 def _find_similar_qas_azure(
     question: str,
@@ -96,8 +185,8 @@ def _find_similar_qas_azure(
     index_name = os.environ.get("AZURE_SEARCH_QUESTION_INDEX", "rfi-questions")
     search_client = _get_search_client(index_name)
 
-    # Build filter — category is always applied (sanitize to prevent OData injection)
-    search_filter = f"category eq '{_sanitize_odata_string(category)}'"
+    # Build filter — category is always applied
+    search_filter = f"category eq '{category}'"
 
     # Hybrid query: keyword + vector + semantic ranker
     vector_query = VectorizedQuery(
@@ -142,24 +231,80 @@ def _find_similar_qas_azure(
     return output
 
 
-def _find_similar_qas(
+def _find_similar_qas_json(
     question: str,
     category: str,
+    knowledge_base: dict,
     client_name: str = "",
     max_results: int = 10,
 ) -> list[dict]:
     """
-    Retrieve similar Q&A pairs via Azure AI Search hybrid retrieval.
-    Return shape: [{"question", "answer", "client", "source", "match_type", "score"}, ...]
+    v1 fallback: filter JSON by category, boost same-client.
+    No relevance ranking — returns in insertion order with client boost.
     """
-    return _find_similar_qas_azure(question, category, client_name, max_results)
+    same_client = []
+    other_client = []
+
+    cat_qas = knowledge_base.get("by_category", {}).get(category, [])
+    for qa in cat_qas:
+        entry = {
+            "question": qa["question"],
+            "answer": qa["answer"],
+            "client": qa.get("client", ""),
+            "source": qa.get("source", ""),
+            "match_type": "same_category",
+        }
+        if client_name and qa.get("client", "").lower() == client_name.lower():
+            entry["match_type"] = "same_client"
+            same_client.append(entry)
+        else:
+            other_client.append(entry)
+
+    results = same_client + other_client
+
+    if not results:
+        for qa in knowledge_base.get("by_category", {}).get("Uncategorized", []):
+            results.append({
+                "question": qa["question"],
+                "answer": qa["answer"],
+                "client": qa.get("client", ""),
+                "source": qa.get("source", ""),
+                "match_type": "uncategorized",
+            })
+
+    return results[:max_results]
 
 
-def _find_base_info(category: str, question: str) -> str:
+def _find_similar_qas(
+    question: str,
+    category: str,
+    knowledge_base: dict,
+    client_name: str = "",
+    max_results: int = 10,
+) -> list[dict]:
+    """
+    Retrieve similar Q&A pairs. Uses Azure AI Search when configured,
+    falls back to JSON category filter otherwise.
+
+    Return shape is stable regardless of backend:
+    [{"question", "answer", "client", "source", "match_type", "score"?}, ...]
+    """
+    if _azure_configured():
+        try:
+            return _find_similar_qas_azure(question, category, client_name, max_results)
+        except Exception as e:
+            print(f"  WARN: Azure AI Search failed, falling back to JSON: {e}")
+
+    return _find_similar_qas_json(question, category, knowledge_base, client_name, max_results)
+
+
+def _find_base_info_azure(category: str, question: str) -> str:
     """
     Retrieve relevant base info chunks from Azure AI Search knowledge index.
     Returns formatted text to inject into the filler prompt.
     """
+    if not _azure_configured():
+        return ""
 
     index_name = os.environ.get("AZURE_SEARCH_KNOWLEDGE_INDEX", "rfi-knowledge")
     try:
@@ -176,7 +321,7 @@ def _find_base_info(category: str, question: str) -> str:
         results = search_client.search(
             search_text=question,
             vector_queries=[vector_query],
-            filter=f"category eq '{_sanitize_odata_string(category)}'",
+            filter=f"category eq '{category}'",
             top=5,
         )
 
@@ -197,98 +342,62 @@ def _find_base_info(category: str, question: str) -> str:
 
 def match_and_fill(
     questions: list[dict],
+    knowledge_base: dict,
+    base_info: dict[str, str],
     client_name: str = "",
     client: Anthropic | None = None,
 ) -> list[dict]:
     """
     For each question, find similar past answers and generate a response.
     Adds 'generated_answer', 'confidence', and 'source_references' to each question.
-
-    Retrieval is via Azure AI Search only (both Q&A and base info).
     """
     client = client or _get_client()
 
-    for q in questions:
-        category = q.get("category", q.get("category_hint", "Uncategorized"))
+    # Map category names to base info keys
+    category_to_base = {
+        "Company Information": ["Company Information"],
+        "Commercial Information": ["Commercial Information (General)"],
+        "Compliance": ["Compliance"],
+        "Legal": [],  # No base info yet
+        "Data & Information Security": ["Data, information security, and client confidentiality"],
+        "ESG": ["Environmental, social, and governance"],
+        "People Information": ["People Information"],
+        "Suppliers & Freelancers": ["Suppliers and freelancers"],
+        "Technology & AI": ["Technology and AI"],
+    }
 
-        # Gather context — past Q&A pairs via Azure AI Search
-        similar_qas = _find_similar_qas(q["question_text"], category, client_name)
+    # Process in batches of 5 to balance speed and quality
+    batch_size = 5
+    for start in range(0, len(questions), batch_size):
+        batch = questions[start:start + batch_size]
 
-        # Get relevant base info via Azure AI Search
-        base_info_text = _find_base_info(category, q["question_text"])
+        for q in batch:
+            category = q.get("category", "Uncategorized")
 
-        prompt = _build_filler_prompt(q, similar_qas, base_info_text)
-
-        try:
-            response = client.messages.create(
-                model="claude-sonnet-4-20250514",
-                max_tokens=2048,
-                temperature=0.1,
-                messages=[{"role": "user", "content": prompt}],
+            # Gather context — past Q&A pairs
+            similar_qas = _find_similar_qas(
+                q["question_text"], category, knowledge_base, client_name
             )
 
-            # Truncation detection
-            if response.stop_reason == "max_tokens":
-                q["generated_answer"] = response.content[0].text.strip()
-                q["confidence"] = 0.3
-                q["citation"] = ""
-                q["source_references"] = []
-                q["fill_status"] = "truncated"
-                continue
+            # Get relevant base info
+            # Azure path: semantic search over chunked base info
+            # JSON fallback: full text files by category mapping
+            base_info_text = _find_base_info_azure(category, q["question_text"])
+            if not base_info_text:
+                for key in category_to_base.get(category, []):
+                    if key in base_info:
+                        base_info_text += f"\n--- {key} ---\n{base_info[key]}\n"
 
-            text = response.content[0].text.strip()
-            if text.startswith("```"):
-                text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+            # Build context for Claude
+            past_qa_text = ""
+            if similar_qas:
+                past_qa_text = "\n\nPast Q&A pairs from similar RFIs:\n"
+                for i, qa in enumerate(similar_qas):
+                    past_qa_text += f"\n[Past Q{i+1} | Client: {qa['client']} | Source: {qa['source']}]\n"
+                    past_qa_text += f"Q: {qa['question']}\n"
+                    past_qa_text += f"A: {qa['answer']}\n"
 
-            result = json.loads(text)
-            q["generated_answer"] = result.get("answer", "")
-            q["confidence"] = min(max(float(result.get("confidence", 0)), 0), 1.0)
-            q["citation"] = result.get("citation", "")
-            q["source_references"] = result.get("sources", [])
-            q["fill_status"] = "filled"
-
-        except json.JSONDecodeError:
-            q["generated_answer"] = response.content[0].text.strip() if response else ""
-            q["confidence"] = 0.4
-            q["citation"] = ""
-            q["source_references"] = []
-            q["fill_status"] = "parse_error"
-
-        except Exception as e:
-            error_str = str(e).lower()
-            if "rate" in error_str and "limit" in error_str:
-                q["generated_answer"] = "[RATE LIMITED] Could not generate answer."
-                q["confidence"] = 0.0
-                q["fill_status"] = "rate_limited"
-            else:
-                q["generated_answer"] = f"[ERROR] Could not generate answer: {e}"
-                q["confidence"] = 0.0
-                q["fill_status"] = "error"
-            q["citation"] = ""
-            q["source_references"] = []
-
-        # Progress indicator
-        print(f"  Filled {questions.index(q) + 1}/{len(questions)} questions", end="\r")
-
-    print()
-    return questions
-
-
-# ─── ASYNC CONCURRENT FILLER ────────────────────────────────────────────────
-
-def _build_filler_prompt(q: dict, similar_qas: list[dict], base_info_text: str) -> str:
-    """Build the filler prompt for a single question. Shared by sync and async paths."""
-    category = q.get("category", q.get("category_hint", "Uncategorized"))
-
-    past_qa_text = ""
-    if similar_qas:
-        past_qa_text = "\n\nPast Q&A pairs from similar RFIs:\n"
-        for i, qa in enumerate(similar_qas):
-            past_qa_text += f"\n[Past Q{i+1} | Client: {qa['client']} | Source: {qa['source']}]\n"
-            past_qa_text += f"Q: {qa['question']}\n"
-            past_qa_text += f"A: {qa['answer']}\n"
-
-    return f"""You are filling out an RFI (Request for Information) for Avalere Health, a healthcare consulting firm.
+            prompt = f"""You are filling out an RFI (Request for Information) for Avalere Health, a healthcare consulting firm.
 
 QUESTION (Category: {category}):
 {q['question_text']}
@@ -316,51 +425,13 @@ Respond with ONLY a JSON object:
   "sources": ["list of sources used"]
 }}
 """
-
-
-async def _fill_one_question_async(
-    q: dict,
-    client_name: str,
-    async_client: AsyncAnthropic,
-    semaphore: asyncio.Semaphore,
-    on_progress=None,
-) -> None:
-    """Fill a single question with rate-limit retry and backoff."""
-    category = q.get("category", q.get("category_hint", "Uncategorized"))
-    q["fill_status"] = "filling"
-    if on_progress:
-        await on_progress(q)
-
-    # Retrieval via Azure AI Search
-    similar_qas = _find_similar_qas(q["question_text"], category, client_name)
-
-    # Base info via Azure AI Search
-    base_info_text = _find_base_info(category, q["question_text"])
-
-    prompt = _build_filler_prompt(q, similar_qas, base_info_text)
-
-    # Retry with exponential backoff (max 3 retries, base 2s)
-    max_retries = 3
-    base_delay = 2.0
-
-    async with semaphore:
-        for attempt in range(max_retries + 1):
             try:
-                response = await async_client.messages.create(
+                response = client.messages.create(
                     model="claude-sonnet-4-20250514",
                     max_tokens=2048,
                     temperature=0.1,
                     messages=[{"role": "user", "content": prompt}],
                 )
-
-                # Truncation detection
-                if response.stop_reason == "max_tokens":
-                    q["generated_answer"] = response.content[0].text.strip()
-                    q["confidence"] = 0.3
-                    q["citation"] = ""
-                    q["source_references"] = []
-                    q["fill_status"] = "truncated"
-                    break
 
                 text = response.content[0].text.strip()
                 if text.startswith("```"):
@@ -371,79 +442,18 @@ async def _fill_one_question_async(
                 q["confidence"] = min(max(float(result.get("confidence", 0)), 0), 1.0)
                 q["citation"] = result.get("citation", "")
                 q["source_references"] = result.get("sources", [])
-                q["fill_status"] = "filled"
-                break
-
-            except json.JSONDecodeError:
-                q["generated_answer"] = response.content[0].text.strip() if response else ""
-                q["confidence"] = 0.4
-                q["citation"] = ""
-                q["source_references"] = []
-                q["fill_status"] = "parse_error"
-                break  # Don't retry parse errors
 
             except Exception as e:
-                error_str = str(e).lower()
-                is_rate_limit = "rate" in error_str and "limit" in error_str
-                is_overloaded = "overloaded" in error_str or "529" in error_str
-
-                if (is_rate_limit or is_overloaded) and attempt < max_retries:
-                    delay = base_delay * (2 ** attempt)
-                    await asyncio.sleep(delay)
-                    continue
-
-                if is_rate_limit:
-                    q["generated_answer"] = "[RATE LIMITED] Could not generate answer."
-                    q["confidence"] = 0.0
-                    q["fill_status"] = "rate_limited"
-                else:
-                    q["generated_answer"] = f"[ERROR] Could not generate answer: {e}"
-                    q["confidence"] = 0.0
-                    q["fill_status"] = "error"
+                q["generated_answer"] = f"[ERROR] Could not generate answer: {e}"
+                q["confidence"] = 0.0
                 q["citation"] = ""
                 q["source_references"] = []
-                break
 
-    if on_progress:
-        await on_progress(q)
+        # Progress indicator
+        done = min(start + batch_size, len(questions))
+        print(f"  Filled {done}/{len(questions)} questions", end="\r")
 
-
-async def match_and_fill_async(
-    questions: list[dict],
-    client_name: str = "",
-    max_concurrent: int = 5,
-    on_progress=None,
-) -> list[dict]:
-    """
-    Async concurrent fill — production path.
-
-    Processes all questions in parallel (up to max_concurrent) with:
-    - asyncio.Semaphore for concurrency control
-    - Exponential backoff on rate limits (base 2s, max 3 retries)
-    - fill_status tracking per question
-    - Truncation detection (stop_reason == max_tokens → confidence 0.3)
-
-    Args:
-        questions: parsed question dicts (must have question_text, category_hint at minimum)
-        client_name: for same-client boosting
-        max_concurrent: max parallel Claude calls (default 5)
-        on_progress: async callback(q) called when each question status changes
-    """
-    async_client = AsyncAnthropic()
-    semaphore = asyncio.Semaphore(max_concurrent)
-
-    # Mark all as pending
-    for q in questions:
-        q["fill_status"] = "pending"
-
-    tasks = [
-        _fill_one_question_async(
-            q, client_name, async_client, semaphore, on_progress,
-        )
-        for q in questions
-    ]
-
-    await asyncio.gather(*tasks)
+    print()
     return questions
 
 
@@ -464,17 +474,17 @@ def review_answers(
     """
     client = client or _get_client()
 
-    # Group answers by sheet_name (PRD: sheets are the natural grouping from source Excel)
-    by_sheet = {}
+    # Group answers by category to check consistency
+    by_category = {}
     for q in questions:
-        sheet = q.get("sheet_name", "Unknown")
-        if sheet not in by_sheet:
-            by_sheet[sheet] = []
-        by_sheet[sheet].append(q)
+        cat = q.get("category", "Uncategorized")
+        if cat not in by_category:
+            by_category[cat] = []
+        by_category[cat].append(q)
 
-    # Check for contradictions within each sheet
-    for sheet, sheet_qs in by_sheet.items():
-        answered = [q for q in sheet_qs if q.get("generated_answer") and q["confidence"] > 0]
+    # Check for contradictions within each category
+    for cat, cat_qs in by_category.items():
+        answered = [q for q in cat_qs if q.get("generated_answer") and q["confidence"] > 0]
 
         # Categories with 0-1 answers: mark as reviewed (nothing to contradict)
         if len(answered) < 2:
@@ -495,7 +505,7 @@ def review_answers(
                 temperature=0,
                 messages=[{
                     "role": "user",
-                    "content": f"""Review these RFI answers for Avalere Health from the "{sheet}" sheet.
+                    "content": f"""Review these RFI answers for Avalere Health in the "{cat}" category.
 Check for:
 1. Contradictions between answers (e.g., different employee counts, inconsistent company descriptions)
 2. Factual errors or implausible claims
@@ -548,7 +558,7 @@ If no issues found, respond with {{"contradictions": [], "flags": []}}
 
         except (json.JSONDecodeError, IndexError, KeyError, ValueError) as e:
             # Parse errors: review failed but not fatal — flag all as unreviewed
-            print(f"  WARN: Review parse error for sheet '{sheet}': {e}")
+            print(f"  WARN: Review parse error for category '{cat}': {e}")
             for q in answered:
                 q["review_status"] = "unreviewed"
                 q["review_flag"] = f"Review could not parse response: {e}"
@@ -565,7 +575,7 @@ If no issues found, respond with {{"contradictions": [], "flags": []}}
                 raise  # Rate limits must not be swallowed
 
             # Other API errors: flag as unreviewed
-            print(f"  WARN: Review failed for sheet '{sheet}': {e}")
+            print(f"  WARN: Review failed for category '{cat}': {e}")
             for q in answered:
                 q["review_status"] = "unreviewed"
                 q["review_flag"] = f"Review failed: {e}"

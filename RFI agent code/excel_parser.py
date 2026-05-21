@@ -142,7 +142,10 @@ def _detect_columns(sheet) -> tuple:
         number_col = n_cols[0] if n_cols else None
 
         # Trust the header labels — they tell us exactly which column is which
+        # If question_col collides with number_col, pick the next q_col candidate
         question_col = q_cols[0] if q_cols else None
+        if question_col is not None and question_col == number_col and len(q_cols) > 1:
+            question_col = q_cols[1]
         answer_col = a_cols[0] if a_cols else None
 
         # If the detected question column header is just a label ("Questions", "Question #")

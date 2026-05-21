@@ -19,7 +19,7 @@ from fastapi.responses import FileResponse
 from sse_starlette.sse import EventSourceResponse
 
 from excel_parser import parse_rfi, extract_client_from_filename, RFIQuestion
-from agents import match_and_fill_async, review_answers
+from agents import match_and_fill, review_answers
 from writer import write_filled_rfi
 
 load_dotenv()
@@ -229,21 +229,33 @@ async def fill_questions(session_id: str):
                 }),
             }
 
-        # We can't pass a generator-yielding callback directly to match_and_fill_async.
-        # Instead, use a queue to bridge async progress events to SSE.
+        # We can't pass a generator-yielding callback directly to match_and_fill.
+        # Instead, use a queue to bridge progress events to SSE.
         progress_queue: asyncio.Queue = asyncio.Queue()
 
         async def progress_callback(q: dict):
             await progress_queue.put(q)
 
-        # Run fill in background task
-        fill_task = asyncio.create_task(
-            match_and_fill_async(
-                questions,
-                client_name=client_name,
-                on_progress=progress_callback,
+        # Run fill in background task (sync function wrapped in executor)
+        loop = asyncio.get_event_loop()
+
+        async def run_fill():
+            # match_and_fill is sync and doesn't support on_progress callback
+            # Run it in executor and post all results at once
+            from indexer import load_knowledge_base
+            from base_info_parser import load_base_info
+            knowledge_base = load_knowledge_base()
+            base_info = load_base_info()
+            filled = await loop.run_in_executor(
+                None, match_and_fill, questions, knowledge_base, base_info, client_name
             )
-        )
+            # Update session questions and push progress for each
+            for i, q in enumerate(filled):
+                questions[i].update(q)
+                questions[i]["fill_status"] = "filled"
+                await progress_queue.put(questions[i])
+
+        fill_task = asyncio.create_task(run_fill())
 
         # Stream progress events as they arrive
         completed = 0

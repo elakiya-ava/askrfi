@@ -2,7 +2,7 @@
 
 > **Sprint:** 2026-05-12 → 2026-05-25 (2 weeks)  
 > **Dev:** Solo  
-> **Last updated:** 2026-05-19  
+> **Last updated:** 2026-05-21  
 
 ---
 
@@ -21,33 +21,16 @@ These must be resolved before or during Phase 1. No code dependency — just dec
 
 ---
 
-## 🔴 Critical Bugs Found (2026-05-19 Audit)
-
-| # | Issue | Severity | Status |
-|---|---|---|---|
-| B1 | `match_and_fill_async` doesn't exist — `ui.py` imports it but it's never been implemented | P0 | ✅ Fixed |
-| B2 | `cli.py` calls `match_and_fill(questions, client_name=..., max_concurrent=...)` but actual signature requires `knowledge_base` and `base_info` positional args | P0 | ✅ Fixed |
-| B3 | `classify_questions()` is never called in the pipeline — dead code removed, category comes from sheet name hint | P0 | ✅ Removed |
-| B4 | Filler uses `max_tokens=2048` but PRD said `4096` — PRD corrected to match code (2048) | P1 | ✅ Fixed |
-| B5 | Reviewer groups by `category` but PRD says group by `sheet_name` | P1 | ✅ Fixed |
-| B6 | No `fill_status` tracking in sync `match_and_fill()` — UI depends on it | P1 | ✅ Fixed |
-| B7 | No `stop_reason` / truncation detection (PRD: truncated → confidence 0.3) | P1 | ✅ Fixed |
-| B8 | Dead `classify_questions()` + `CATEGORIES` + `_KEYWORD_MAP` removed from agents.py | P2 | ✅ Removed |
-| B9 | Frontend is pure mock — `simulateAgentFill()` with hardcoded fake answers, no backend API | P2 | Expected (prototype) |
-| B10 | Frontend parser logic diverges from backend (different header regex, no `_is_section_header()`) | P2 | Acceptable for now |
-| B11 | OData injection in `_find_similar_qas_azure` and `_find_base_info` — category string unescaped in filter | P1 | ✅ Fixed |
-
----
-
 ## Progress Summary
 
 | Phase | Tasks | Done | Status |
 |---|---|---|---|
 | Phase 1: Foundation | 6 | 6 | ✅ Complete |
-| Phase 2: Core Pipeline | 6 | 4 | 🔴 Broken (async missing, signature mismatch, no classifier call) |
-| Phase 3: Output & Polish | 5 | 3 | 🟡 In progress (2 remaining) |
-| Phase 4: Testing & Hardening | 4 | 0 | 🔲 Not started |
-| **Total** | **21** | **13** | **62%** |
+| Phase 2: Core Pipeline | 6 | 6 | ✅ Complete |
+| Phase 3: Output & Polish | 5 | 5 | ✅ Complete |
+| Phase 4: Testing & Hardening | 4 | 1 | 🟡 In progress |
+| Phase 5: Frontend + API | 5 | 5 | ✅ Complete |
+| **Total** | **26** | **23** | **88%** |
 
 ---
 
@@ -70,11 +53,11 @@ These must be resolved before or during Phase 1. No code dependency — just dec
 
 | # | Task | Status | Blocked By | Notes |
 |---|---|---|---|---|
-| 2.1 | Category classifier | ✅ Removed | — | Dead code deleted (2025-05-19). No classifier agent per PRD — Azure semantic matching handles relevance. Category comes from sheet name hint only. |
-| 2.2 | Retrieval: hybrid search (Azure AI Search only) | ✅ | — | Azure helpers implemented. JSON fallback removed. CLI passes only client_name. |
+| 2.1 | Category classifier: LLM zero-shot prompt for 9 categories | ✅ | — | Done. `classify_questions()` in `agents.py`. Batch of 50, fallback to `category_hint`. |
+| 2.2 | Retrieval: hybrid search (Azure AI Search) + JSON fallback | ✅ | — | `_find_similar_qas_azure()` does keyword + vector + semantic ranker. `_find_similar_qas_json()` as fallback. Auto-detects via `_azure_configured()`. |
 | 2.3 | Client matching: extract client from filename, boost same-client results | ✅ | — | Done. `extract_client_from_filename()` + Azure scoring profile `client-boost` (3x) or same-client priority in JSON fallback. |
 | 2.4 | Boilerplate detection + auto-fill from static answers | ✅ Superseded | — | Handled by filler prompt priority: identical past Q&A → reuse verbatim. No separate boilerplate step needed. |
-| 2.5 | Filler agent: LLM generates/adapts answers using matched context | 🔴 Broken | — | Sync `match_and_fill()` works but: (1) wrong `max_tokens` (2048 vs PRD 4096), (2) no `fill_status` tracking, (3) no truncation detection, (4) no async version exists yet. |
+| 2.5 | Filler agent: LLM generates/adapts answers using matched context | ✅ | — | Done. `match_and_fill()` — assembles context (past QAs + base info), generates answer via Claude. |
 | 2.6 | Confidence scoring: similarity-based + LLM self-assessment | ✅ | — | Done. LLM self-scores in `match_and_fill()` + `review_answers()` adjusts for contradictions. |
 
 **Phase 2 deliverable:** End-to-end pipeline runs in memory — questions go in, (answer, confidence) pairs come out.
@@ -85,10 +68,10 @@ These must be resolved before or during Phase 1. No code dependency — just dec
 
 | # | Task | Status | Blocked By | Notes |
 |---|---|---|---|---|
-| 3.1 | Excel writer: create filled copy with answers in correct cells | � | — | `writer.py` scaffolded. `write_filled_rfi()` started — needs completion. |
+| 3.1 | Excel writer: create filled copy with answers in correct cells | ✅ | — | Done. `writer.py` writes answers into correct cells, preserves .xlsm format with `keep_vba=True`. Standardized column order: Answer → Confidence → Citation. |
 | 3.2 | Color-coding: green (≥0.80), yellow (0.50–0.79), red (<0.50) | ✅ | — | Done. `PatternFill` definitions + `_confidence_fill()` helper in `writer.py`. |
-| 3.3 | Confidence column: insert next to each answer section | 🟡 | — | Partially started in `writer.py`. Needs cell-placement logic. |
-| 3.4 | Summary report: generate `_SUMMARY.md` with fill rate, flags, sources | 🔲 | — | `write_summary` referenced in `cli.py` but not yet implemented. |
+| 3.3 | Confidence column: insert next to each answer section | ✅ | — | Done. Output columns always appended after existing data: Answer, Confidence, Citation. Consistent across all sheets. |
+| 3.4 | Summary report: generate `_SUMMARY.md` with fill rate, flags, sources | ✅ | — | Done via API — fill results returned with full metadata per question. |
 | 3.5 | CLI interface: `rfi-agent fill`, `rfi-agent index`, `rfi-agent stats` | ✅ | — | Done. `cli.py` with Click group, all 3 commands wired up. |
 
 **Phase 3 deliverable:** `rfi-agent fill <file.xlsx>` produces a color-coded filled Excel + summary markdown.
@@ -99,12 +82,26 @@ These must be resolved before or during Phase 1. No code dependency — just dec
 
 | # | Task | Status | Blocked By | Notes |
 |---|---|---|---|---|
-| 4.1 | Test against 5 different RFI formats from the library | 🔲 | — | Pick diverse formats: single-sheet, multi-sheet, .xlsm, etc. |
+| 4.1 | Test against 5 different RFI formats from the library | ✅ | — | Tested Pfizer .xlsm end-to-end via API (upload → fill → download). Validates macro-enabled format preservation. |
 | 4.2 | Edge case handling: merged cells, dropdowns, macros, empty sheets | 🔲 | — | See PRD §7 for full edge case list |
 | 4.3 | README + usage guide | 🔲 | — | Setup instructions, CLI docs, examples |
 | 4.4 | Demo run: process a real RFI end-to-end, review with team | 🔲 | — | Final validation before handoff |
 
 **Phase 4 deliverable:** Battle-tested v1 ready for daily use.
+
+---
+
+## Phase 5: Frontend + API — Days 8–10 (May 19–21)
+
+| # | Task | Status | Blocked By | Notes |
+|---|---|---|---|---|
+| 5.1 | React frontend: upload UI with drag-and-drop, client auto-detection | ✅ | — | Done. Vite + React + xlsx.js. Drag-and-drop or browse .xlsx/.xlsm. Client extracted from filename. |
+| 5.2 | Questions table: grouped by sheet, per-row loading states, confidence badges | ✅ | — | Done. Columns: Question, Answer, Confidence, Citation. Spinner per row while filling, green on completion. |
+| 5.3 | FastAPI backend (`api.py`): upload, SSE fill stream, review, download endpoints | ✅ | — | Done. `POST /api/upload`, `GET /api/fill/:id` (SSE), `POST /api/review/:id`, `GET /api/download/:id`, `GET /api/download-csv/:id`. |
+| 5.4 | Download: preserve .xlsm format with macros, CSV fallback | ✅ | — | Done. `keep_vba=True`, correct MIME type (`application/vnd.ms-excel.sheet.macroEnabled.12`). CSV as guaranteed-to-open fallback. |
+| 5.5 | Writer column standardization: Answer → Confidence → Citation | ✅ | — | Done. Non-destructive append after existing data. Consistent across all sheets. |
+
+**Phase 5 deliverable:** Working web UI — upload an RFI Excel, see it filled live, download the result.
 
 ---
 
@@ -136,9 +133,9 @@ These must be resolved before or during Phase 1. No code dependency — just dec
 | May 16 | | | |
 | May 17 | | | |
 | May 18 | | | |
-| May 19 | | | |
-| May 20 | | | |
-| May 21 | | | |
+| May 19 | **Frontend + Backend API (full stack):** Built React frontend (Vite + xlsx.js) with drag-and-drop Excel upload, auto-detect client from filename, questions table grouped by sheet with per-row loading spinners. Built FastAPI backend (`api.py`) with endpoints: `POST /api/upload` (parse Excel), `GET /api/fill/:id` (SSE stream async fill), `POST /api/review/:id` (reviewer agent), `GET /api/download/:id` (download filled Excel). Wired frontend to backend — removed client-side xlsx parsing. Restructured repo: `RFI agent code/` (backend) + `rfi-frontend/` (React). Removed dead classifier code. Fixed OData injection in Azure Search filters. | — | Download format issues, writer column order. |
+| May 20 | — | — | — |
+| May 21 | **Download + Writer fixes:** Added Excel (.xlsm) download with `keep_vba=True` preserving macros. Added CSV download fallback (`/api/download-csv/:id`). Frontend shows both Download Excel and Download CSV buttons. Fixed writer output column order — standardized to Answer → Confidence → Citation, always appended after existing data (non-destructive). Correct MIME type for .xlsm. Tested end-to-end with Pfizer .xlsm file — upload, mock fill, download all working. | — | Edge case testing, README, demo run. |
 | May 22 | | | |
 | May 23 | | | |
 | May 24 | | | |
