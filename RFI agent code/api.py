@@ -19,6 +19,7 @@ from fastapi.responses import FileResponse
 from sse_starlette.sse import EventSourceResponse
 
 from excel_parser import parse_rfi, extract_client_from_filename, RFIQuestion
+from doc_parser import parse_document, extract_client_from_filename as doc_extract_client
 from agents import match_and_fill, review_answers
 from writer import write_filled_rfi
 
@@ -137,10 +138,12 @@ def _generate_pdf(questions: list[dict], file_name: str, client_name: str) -> st
 @app.post("/api/upload")
 async def upload_file(file: UploadFile):
     """
-    Upload an Excel RFI file. Returns parsed questions + session ID.
+    Upload an RFI file. Supports Excel (.xlsx, .xlsm), Word (.docx), and PowerPoint (.pptx).
+    Returns parsed questions + session ID.
     """
-    if not file.filename or not file.filename.lower().endswith((".xlsx", ".xlsm")):
-        raise HTTPException(400, "Only .xlsx and .xlsm files are supported")
+    ALLOWED_EXTENSIONS = (".xlsx", ".xlsm", ".docx", ".pptx")
+    if not file.filename or not file.filename.lower().endswith(ALLOWED_EXTENSIONS):
+        raise HTTPException(400, "Only .xlsx, .xlsm, .docx, and .pptx files are supported")
 
     # Save to temp location
     session_id = str(uuid.uuid4())
@@ -153,12 +156,15 @@ async def upload_file(file: UploadFile):
 
     saved_path.write_bytes(content)
 
-    # Parse
+    # Parse based on file type
     try:
-        rfi_questions: list[RFIQuestion] = parse_rfi(str(saved_path))
+        if ext.lower() in (".docx", ".pptx"):
+            rfi_questions: list[RFIQuestion] = parse_document(str(saved_path))
+        else:
+            rfi_questions: list[RFIQuestion] = parse_rfi(str(saved_path))
     except Exception as e:
         saved_path.unlink(missing_ok=True)
-        raise HTTPException(422, f"Failed to parse Excel file: {e}")
+        raise HTTPException(422, f"Failed to parse file: {e}")
 
     if not rfi_questions:
         saved_path.unlink(missing_ok=True)

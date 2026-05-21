@@ -8,8 +8,8 @@ function Upload({ onUpload, apiBase }) {
   const processFile = useCallback(async (file) => {
     setError('')
 
-    if (!file.name.match(/\.(xlsx|xlsm)$/i)) {
-      setError('Please upload an Excel file (.xlsx or .xlsm)')
+    if (!file.name.match(/\.(xlsx|xlsm|docx|pptx)$/i)) {
+      setError('Please upload an RFI file (.xlsx, .xlsm, .docx, or .pptx)')
       return
     }
 
@@ -82,14 +82,14 @@ function Upload({ onUpload, apiBase }) {
         ) : (
           <>
             <div className="drop-icon">📄</div>
-            <h2>Upload RFI Excel File</h2>
-            <p>Drag & drop your .xlsx or .xlsm file here</p>
+            <h2>Upload RFI File</h2>
+            <p>Drag & drop your .xlsx, .xlsm, .docx, or .pptx file here</p>
             <span className="or-divider">or</span>
             <label className="file-input-label">
               Browse Files
               <input
                 type="file"
-                accept=".xlsx,.xlsm"
+                accept=".xlsx,.xlsm,.docx,.pptx"
                 onChange={handleFileInput}
                 hidden
               />

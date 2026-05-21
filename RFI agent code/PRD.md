@@ -34,10 +34,12 @@ Avalere Health consultants manually fill RFIs (Requests for Information) from ph
 ### Non-Goals
 - Web UI / dashboard
 - SharePoint API integration (blocked by InfoSec)
-- .docx / .pptx format support
 - Real-time collaboration
 - Auto-submission to clients
 - Fine-tuning any model
+
+### Planned (v2.1 — branch `word_ppt_input`)
+- **.docx / .pptx format support** — parse RFI questions from Word documents and PowerPoint slides, extract to same question structure as Excel. In progress on feature branch, not yet tested or merged.
 
 ---
 

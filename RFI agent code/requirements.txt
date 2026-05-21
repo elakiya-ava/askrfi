@@ -13,3 +13,5 @@ fastapi
 uvicorn[standard]
 sse-starlette
 python-multipart
+python-docx
+python-pptx
