@@ -75,6 +75,13 @@ def _looks_like_question(text: str) -> bool:
     """Heuristic: does this text look like a question, prompt, or field label?"""
     if not text or len(text) < 5:
         return False
+    # Reject pure numeric values (integers, floats, percentages, currency)
+    stripped = text.strip().rstrip("%")
+    try:
+        float(stripped.replace(",", "").replace("$", "").replace("£", "").replace("€", ""))
+        return False
+    except ValueError:
+        pass
     # Ends with ? — definitely a question
     if text.rstrip().endswith("?"):
         return True
@@ -90,7 +97,8 @@ def _looks_like_question(text: str) -> bool:
         return True
     # Short field labels are also valid (e.g., "Company Website", "Office Address")
     # Accept anything > 5 chars that isn't just a number or section header
-    if len(text) > 5 and not _is_section_header(text):
+    # Require at least 2 words for the catch-all (single words are category labels, not questions)
+    if len(text) > 5 and not _is_section_header(text) and " " in text.strip():
         return True
     return False
 
@@ -138,8 +146,10 @@ def _detect_columns(sheet) -> tuple:
         answer_col = a_cols[0] if a_cols else None
 
         # If the detected question column header is just a label ("Questions", "Question #")
-        # rather than actual question content, the real questions are likely in the next column
-        if question_col is not None:
+        # rather than actual question content, the real questions are likely in the next column.
+        # BUT: only apply this heuristic if we don't already have a confirmed answer column,
+        # because the next column IS the answer column when both headers are detected.
+        if question_col is not None and answer_col is None:
             header_text = header_texts[question_col] if question_col < len(header_texts) else ""
             if QUESTION_LABEL_ONLY.match(header_text.strip()):
                 # Check if the next column has longer text in data rows (= actual questions)

@@ -1,0 +1,140 @@
+[
+  {
+    "file": "test1_numeric_sheets_bug.xlsx",
+    "upload": {
+      "status": "pass",
+      "detail": "2 questions",
+      "http_code": 200
+    },
+    "fill": {
+      "status": "pass",
+      "detail": "2/2 filled"
+    },
+    "download": {
+      "status": "pass",
+      "detail": "6.7KB"
+    },
+    "questions_parsed": 2,
+    "sheets_detected": [
+      "Questions"
+    ],
+    "questions_detail": {
+      "Questions": 2
+    }
+  },
+  {
+    "file": "test2_corrupted_not_excel.xlsx",
+    "upload": {
+      "status": "expected_error",
+      "detail": "422: Failed to parse Excel file: File is not a zip file",
+      "http_code": 422
+    },
+    "fill": {
+      "status": "not_run",
+      "detail": ""
+    },
+    "download": {
+      "status": "not_run",
+      "detail": ""
+    },
+    "questions_parsed": 0,
+    "sheets_detected": [],
+    "questions_detail": {}
+  },
+  {
+    "file": "test2b_truncated_excel.xlsx",
+    "upload": {
+      "status": "expected_error",
+      "detail": "422: Failed to parse Excel file: File is not a zip file",
+      "http_code": 422
+    },
+    "fill": {
+      "status": "not_run",
+      "detail": ""
+    },
+    "download": {
+      "status": "not_run",
+      "detail": ""
+    },
+    "questions_parsed": 0,
+    "sheets_detected": [],
+    "questions_detail": {}
+  },
+  {
+    "file": "test3_writer_stress.xlsx",
+    "upload": {
+      "status": "pass",
+      "detail": "5 questions",
+      "http_code": 200
+    },
+    "fill": {
+      "status": "pass",
+      "detail": "5/5 filled"
+    },
+    "download": {
+      "status": "pass",
+      "detail": "7.6KB"
+    },
+    "questions_parsed": 5,
+    "sheets_detected": [
+      "Section 3-4 \u2014 Overview (Draft)",
+      "Wide Format RFI"
+    ],
+    "questions_detail": {
+      "Wide Format RFI": 3,
+      "Section 3-4 \u2014 Overview (Draft)": 2
+    }
+  },
+  {
+    "file": "test4_fake_macro.xlsm",
+    "upload": {
+      "status": "pass",
+      "detail": "5 questions",
+      "http_code": 200
+    },
+    "fill": {
+      "status": "pass",
+      "detail": "5/5 filled"
+    },
+    "download": {
+      "status": "pass",
+      "detail": "5.9KB"
+    },
+    "questions_parsed": 5,
+    "sheets_detected": [
+      "Vendor Questions"
+    ],
+    "questions_detail": {
+      "Vendor Questions": 5
+    }
+  },
+  {
+    "file": "test5a_no_questions.xlsx",
+    "upload": {
+      "status": "expected_error",
+      "detail": "422: No questions found in this file",
+      "http_code": 422
+    },
+    "fill": {
+      "status": "not_run",
+      "detail": ""
+    },
+    "download": {
+      "status": "not_run",
+      "detail": ""
+    },
+    "questions_parsed": 0,
+    "sheets_detected": [],
+    "questions_detail": {}
+  },
+  {
+    "test": "download_before_fill",
+    "status": "pass",
+    "detail": "Correctly rejected with 400: Questions must be filled before download"
+  },
+  {
+    "test": "double_fill",
+    "status": "pass",
+    "detail": "Correctly rejected duplicate fill with 409"
+  }
+]

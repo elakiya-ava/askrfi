@@ -1,0 +1,123 @@
+[
+  {
+    "file": "test1_multi_sheet.xlsx",
+    "upload": {
+      "status": "pass",
+      "detail": "9 questions parsed"
+    },
+    "fill": {
+      "status": "pass",
+      "detail": "9/9 filled"
+    },
+    "download_excel": {
+      "status": "pass",
+      "detail": "Downloaded 8.1KB \u2192 output_test1_multi_sheet.xlsx"
+    },
+    "download_csv": {
+      "status": "pass",
+      "detail": "Downloaded CSV OK"
+    },
+    "questions_parsed": 9,
+    "sheets_detected": [
+      "Company Overview",
+      "Compliance",
+      "Data Security"
+    ]
+  },
+  {
+    "file": "test2_empty_rows_merged.xlsx",
+    "upload": {
+      "status": "pass",
+      "detail": "5 questions parsed"
+    },
+    "fill": {
+      "status": "pass",
+      "detail": "5/5 filled"
+    },
+    "download_excel": {
+      "status": "pass",
+      "detail": "Downloaded 5.9KB \u2192 output_test2_empty_rows_merged.xlsx"
+    },
+    "download_csv": {
+      "status": "pass",
+      "detail": "Downloaded CSV OK"
+    },
+    "questions_parsed": 5,
+    "sheets_detected": [
+      "Vendor Assessment"
+    ]
+  },
+  {
+    "file": "test3_no_headers_special_chars.xlsx",
+    "upload": {
+      "status": "pass",
+      "detail": "7 questions parsed"
+    },
+    "fill": {
+      "status": "pass",
+      "detail": "7/7 filled"
+    },
+    "download_excel": {
+      "status": "pass",
+      "detail": "Downloaded 6.4KB \u2192 output_test3_no_headers_special_chars.xlsx"
+    },
+    "download_csv": {
+      "status": "pass",
+      "detail": "Downloaded CSV OK"
+    },
+    "questions_parsed": 7,
+    "sheets_detected": [
+      "ESG Questions"
+    ]
+  },
+  {
+    "file": "test4_hidden_protected_sheets.xlsx",
+    "upload": {
+      "status": "pass",
+      "detail": "7 questions parsed"
+    },
+    "fill": {
+      "status": "pass",
+      "detail": "7/7 filled"
+    },
+    "download_excel": {
+      "status": "pass",
+      "detail": "Downloaded 8.0KB \u2192 output_test4_hidden_protected_sheets.xlsx"
+    },
+    "download_csv": {
+      "status": "pass",
+      "detail": "Downloaded CSV OK"
+    },
+    "questions_parsed": 7,
+    "sheets_detected": [
+      "Protected Section",
+      "RFI Questions"
+    ]
+  },
+  {
+    "file": "test5_large_malformed_unicode.xlsx",
+    "upload": {
+      "status": "pass",
+      "detail": "215 questions parsed"
+    },
+    "fill": {
+      "status": "pass",
+      "detail": "215/215 filled"
+    },
+    "download_excel": {
+      "status": "pass",
+      "detail": "Downloaded 18.6KB \u2192 output_test5_large_malformed_unicode.xlsx"
+    },
+    "download_csv": {
+      "status": "pass",
+      "detail": "Downloaded CSV OK"
+    },
+    "questions_parsed": 215,
+    "sheets_detected": [
+      "Diversity & Inclusion \ud83c\udf0d",
+      "Financial Data",
+      "Formulas & Edge Cases",
+      "Full Assessment"
+    ]
+  }
+]

@@ -206,6 +206,9 @@ async def fill_questions(session_id: str):
     if session["status"] == "filling":
         raise HTTPException(409, "Fill already in progress")
 
+    if session["status"] in ("filled", "reviewed"):
+        raise HTTPException(409, "Session already filled. Upload a new file to start over.")
+
     session["status"] = "filling"
 
     async def event_generator():
@@ -315,6 +318,9 @@ async def fill_questions_mock(session_id: str):
 
     if session["status"] == "filling":
         raise HTTPException(409, "Fill already in progress")
+
+    if session["status"] in ("filled", "reviewed"):
+        raise HTTPException(409, "Session already filled. Upload a new file to start over.")
 
     session["status"] = "filling"
 
