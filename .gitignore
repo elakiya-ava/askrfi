@@ -14,6 +14,11 @@ dist/
 # Data (large files / sensitive)
 RFI agent code/data/knowledge_base.json
 
+# Docs excluded from repo
+PROJECT-TRACKER.md
+knowledge-retrieval-strategy.md
+SKILL.md
+
 # OS
 .DS_Store
 Thumbs.db
