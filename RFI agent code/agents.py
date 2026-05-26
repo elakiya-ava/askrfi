@@ -32,6 +32,11 @@ CATEGORIES = [
 ]
 
 
+# ─── Anthropic config (from env) ────────────────────────────────────────────
+ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
+ANTHROPIC_MAX_TOKENS = int(os.environ.get("ANTHROPIC_MAX_TOKENS", "2048"))
+
+
 def _get_client() -> Anthropic:
     return Anthropic()
 
@@ -427,8 +432,8 @@ Respond with ONLY a JSON object:
 """
             try:
                 response = client.messages.create(
-                    model="claude-sonnet-4-20250514",
-                    max_tokens=2048,
+                    model=ANTHROPIC_MODEL,
+                    max_tokens=ANTHROPIC_MAX_TOKENS,
                     temperature=0.1,
                     messages=[{"role": "user", "content": prompt}],
                 )
@@ -500,8 +505,8 @@ def review_answers(
 
         try:
             response = client.messages.create(
-                model="claude-sonnet-4-20250514",
-                max_tokens=2048,
+                model=ANTHROPIC_MODEL,
+                max_tokens=ANTHROPIC_MAX_TOKENS,
                 temperature=0,
                 messages=[{
                     "role": "user",

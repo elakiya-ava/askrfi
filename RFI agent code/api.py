@@ -511,4 +511,5 @@ async def health():
         "status": "ok",
         "azure_configured": azure_ok,
         "anthropic_key_set": bool(os.environ.get("ANTHROPIC_API_KEY")),
+        "anthropic_model": os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-20250514"),
     }
