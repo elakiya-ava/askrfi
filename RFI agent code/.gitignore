@@ -15,3 +15,9 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+
+# Documentation (kept locally, not in repo)
+docs/
+CHANGELOG.md
+PRD.md
+HANDOFF*.md
