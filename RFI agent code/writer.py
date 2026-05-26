@@ -118,7 +118,7 @@ def write_filled_rfi(
         for q in sheet_qs:
             row = q["row"]
             answer = q.get("generated_answer", "")
-            confidence = q.get("confidence", 0)
+            confidence = q.get("confidence") or 0
             citation = q.get("citation", "")
 
             try:
