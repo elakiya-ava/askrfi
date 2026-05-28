@@ -7,6 +7,7 @@ import asyncio
 import json
 import os
 import random
+import re
 import tempfile
 import uuid
 from dataclasses import asdict
@@ -32,7 +33,11 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",
         "http://localhost:5174",
+        "http://localhost:5175",
+        "http://localhost:5176",
         "http://127.0.0.1:5173",
+        "http://127.0.0.1:5174",
+        "http://127.0.0.1:5175",
     ],
     allow_methods=["*"],
     allow_headers=["*"],
@@ -214,49 +219,43 @@ async def fill_questions(session_id: str):
     async def event_generator():
         questions = session["questions"]
         client_name = session["client_name"]
-
-        progress_queue: asyncio.Queue = asyncio.Queue()
+        total = len(questions)
         loop = asyncio.get_event_loop()
 
-        async def run_fill():
-            filled = await loop.run_in_executor(
-                None, match_and_fill, questions, None, None, client_name
-            )
-            for i, q in enumerate(filled):
-                questions[i].update(q)
-                questions[i]["fill_status"] = "filled"
-                await progress_queue.put(questions[i])
+        # Load context once (shared across all questions)
+        from indexer import load_knowledge_base
+        from base_info_parser import load_base_info
+        knowledge_base = await loop.run_in_executor(None, load_knowledge_base)
+        base_info = await loop.run_in_executor(None, load_base_info)
 
-        fill_task = asyncio.create_task(run_fill())
-
-        # Stream progress events as they arrive
-        completed = 0
-        total = len(questions)
-
-        while completed < total or not fill_task.done():
+        # Process one question at a time — stream each result immediately
+        for i, q in enumerate(questions):
             try:
-                q = await asyncio.wait_for(progress_queue.get(), timeout=1.0)
-                idx = questions.index(q)
-                yield {
-                    "event": "progress",
-                    "data": json.dumps({
-                        "index": idx,
-                        "status": q.get("fill_status", "pending"),
-                        "generated_answer": q.get("generated_answer", ""),
-                        "confidence": q.get("confidence"),
-                        "citation": q.get("citation", ""),
-                    }),
-                }
-                if q.get("fill_status") in ("filled", "error", "rate_limited", "parse_error", "truncated"):
-                    completed += 1
-            except asyncio.TimeoutError:
-                # Send keepalive
-                if fill_task.done():
-                    break
-                yield {"event": "keepalive", "data": ""}
+                filled = await loop.run_in_executor(
+                    None, match_and_fill, [q], knowledge_base, base_info, client_name
+                )
+                questions[i].update(filled[0])
+                questions[i]["fill_status"] = "filled"
+            except Exception as e:
+                questions[i]["generated_answer"] = f"[ERROR] {e}"
+                questions[i]["confidence"] = 0.0
+                questions[i]["fill_status"] = "error"
 
-        # Ensure task is awaited (propagates exceptions)
-        await fill_task
+            # Clean up any [NEEDS REVIEW] prefix from the answer
+            raw_answer = questions[i].get("generated_answer", "")
+            clean_answer = re.sub(r'^\[NEEDS REVIEW\]\s*[-\u2013\u2014]?\s*', '', raw_answer, flags=re.IGNORECASE)
+            questions[i]["generated_answer"] = clean_answer
+
+            yield {
+                "event": "progress",
+                "data": json.dumps({
+                    "index": i,
+                    "status": questions[i].get("fill_status", "error"),
+                    "generated_answer": clean_answer,
+                    "confidence": questions[i].get("confidence"),
+                    "citation": questions[i].get("citation", ""),
+                }),
+            }
 
         session["status"] = "filled"
         yield {

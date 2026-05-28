@@ -30,7 +30,7 @@ function QuestionsTable({ questions }) {
               </thead>
               <tbody>
                 {sheetQs.map((q, i) => (
-                  <tr key={q.id} className={`row-${q.status}`}>
+                  <tr key={q.id} className={`row-${q.status}${q.status === 'filled' ? ` confidence-${getConfidenceClass(q.confidence)}` : ''}`}>
                     <td className="col-num">{i + 1}</td>
                     <td className="col-question">
                       <div className="q-text">{q.question_text}</div>
@@ -50,7 +50,7 @@ function QuestionsTable({ questions }) {
                       {q.status === 'filled' && (
                         <div className="generated-answer">
                           {q.generated_answer}
-                          <div className="char-count">{q.generated_answer.length} chars</div>
+                          {q.generated_answer && <div className="char-count">{q.generated_answer.length} chars</div>}
                         </div>
                       )}
                       {q.status === 'pending' && (
@@ -58,10 +58,15 @@ function QuestionsTable({ questions }) {
                       )}
                     </td>
                     <td className="col-confidence">
-                      {q.confidence !== null && (
-                        <div className={`confidence-badge ${getConfidenceClass(q.confidence)}`}>
-                          {Math.round(q.confidence * 100)}%
-                        </div>
+                      {q.confidence !== null && q.confidence !== undefined && (
+                        <>
+                          <div className={`confidence-badge ${getConfidenceClass(q.confidence)}`}>
+                            {Math.round(q.confidence * 100)}%
+                          </div>
+                          {q.confidence < 0.5 && (
+                            <div className="needs-review-badge">NEEDS REVIEW</div>
+                          )}
+                        </>
                       )}
                       {q.status === 'filling' && (
                         <div className="spinner small"></div>

@@ -3,13 +3,15 @@ Base info parser — converts PDFs and HTMLs from the base info folder into clea
 Run once to populate data/base_info/ with .txt versions.
 """
 
+from __future__ import annotations
+
 import os
-import fitz  # pymupdf
 from bs4 import BeautifulSoup
 
 
 def parse_pdf(path: str) -> str:
     """Extract text from a PDF file."""
+    import fitz  # pymupdf — only needed for PDF parsing, not for load_base_info()
     doc = fitz.open(path)
     pages = []
     for page in doc:

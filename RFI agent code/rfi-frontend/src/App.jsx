@@ -26,8 +26,8 @@ function App() {
     // Mark all as filling
     setQuestions(prev => prev.map(q => ({ ...q, status: 'filling' })))
 
-    // Connect to SSE stream (use mock fill for demo)
-    const evtSource = new EventSource(`${API_BASE}/api/fill-mock/${sessionId}`)
+    // Connect to SSE stream (real LLM fill)
+    const evtSource = new EventSource(`${API_BASE}/api/fill/${sessionId}`)
 
     evtSource.addEventListener('progress', (e) => {
       const data = JSON.parse(e.data)

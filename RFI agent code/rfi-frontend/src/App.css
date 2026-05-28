@@ -276,6 +276,18 @@ body {
   background: #f0fdf4;
 }
 
+.row-filled.confidence-high td {
+  background: #f0fdf4;
+}
+
+.row-filled.confidence-medium td {
+  background: #fffbeb;
+}
+
+.row-filled.confidence-low td {
+  background: #fef2f2;
+}
+
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.7; }
@@ -367,6 +379,20 @@ body {
 .confidence-badge.low {
   background: #fee2e2;
   color: #991b1b;
+}
+
+.needs-review-badge {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #f59e0b;
 }
 
 /* Citation */

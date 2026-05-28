@@ -345,21 +345,35 @@ def match_and_fill(
         batch = questions[start:start + batch_size]
 
         for q in batch:
-            category = q.get("category", "Uncategorized")
+            category = q.get("category_hint") or q.get("category", "Uncategorized")
+            question_text = q.get("question_text", "").strip()
+
+            if not question_text:
+                q["generated_answer"] = "[ERROR] Missing question_text field"
+                q["confidence"] = 0.0
+                q["citation"] = ""
+                q["source_references"] = []
+                continue
 
             # Gather context — past Q&A pairs
             similar_qas = _find_similar_qas(
-                q["question_text"], category, knowledge_base, client_name
+                question_text, category, knowledge_base, client_name
             )
 
             # Get relevant base info
             # Azure path: semantic search over chunked base info
             # JSON fallback: full text files by category mapping
-            base_info_text = _find_base_info_azure(category, q["question_text"])
+            base_info_text = _find_base_info_azure(category, question_text)
             if not base_info_text:
-                for key in category_to_base.get(category, []):
-                    if key in base_info:
-                        base_info_text += f"\n--- {key} ---\n{base_info[key]}\n"
+                matched_keys = category_to_base.get(category, [])
+                if matched_keys:
+                    for key in matched_keys:
+                        if key in base_info:
+                            base_info_text += f"\n--- {key} ---\n{base_info[key]}\n"
+                else:
+                    # No category match — include ALL base info so LLM has full context
+                    for key, val in base_info.items():
+                        base_info_text += f"\n--- {key} ---\n{val}\n"
 
             # Build context for Claude
             past_qa_text = ""
@@ -373,7 +387,7 @@ def match_and_fill(
             prompt = f"""You are filling out an RFI (Request for Information) for Avalere Health, a healthcare consulting firm.
 
 QUESTION (Category: {category}):
-{q['question_text']}
+{question_text}
 
 {f"EXISTING ANSWER (from previous submission): {q.get('existing_answer', '')}" if q.get('existing_answer') else "No existing answer."}
 
@@ -385,14 +399,15 @@ INSTRUCTIONS:
 2. If similar (but not identical) past Q&A pairs are available, adapt the most relevant answer to fit this specific question.
 3. If an existing answer is provided and is consistent with the base info and past Q&As, you may reuse it.
 4. If base company information is available, use it to construct an accurate answer.
-5. DO NOT fabricate, or hallucinate any facts, statistics, certifications, policy details, or any specifics not present in the provided context. If the context does not contain enough information to answer confidently, respond with "[NEEDS REVIEW]" followed by your best attempt using only what is provided.
+5. DO NOT fabricate, or hallucinate any facts, statistics, certifications, policy details, or any specifics not present in the provided context. If the context does not contain enough information to answer the question, return an empty string for the answer and set confidence to 0.
 6. Keep the tone professional and consistent with a healthcare consulting firm.
 7. Be concise but thorough. Match the expected level of detail.
-8. Add a citation for all the sources you used from the provided context 
+8. Do NOT prefix the answer with "[NEEDS REVIEW]" or any similar tag — use the confidence score to signal uncertainty.
+9. Add a citation for all the sources you used from the provided context 
 
 Respond with ONLY a JSON object:
 {{
-  "answer": "your answer text",
+  "answer": "your answer text (or empty string if you cannot answer)",
   "confidence": 0.0-1.0,
   "citation":"cite sources used in this answer for ex: filename, section heading/sheet name, cell name etc",
   "sources": ["list of sources used"]
@@ -445,7 +460,7 @@ def review_answers(
     # Group answers by category to check consistency
     by_category = {}
     for q in questions:
-        cat = q.get("category", "Uncategorized")
+        cat = q.get("category_hint") or q.get("category", "Uncategorized")
         if cat not in by_category:
             by_category[cat] = []
         by_category[cat].append(q)
@@ -600,7 +615,7 @@ async def match_and_fill_async(
 
     def _fill_one(q: dict) -> None:
         """Sync function that fills a single question (runs in thread)."""
-        category = q.get("category", q.get("category_hint", "Uncategorized"))
+        category = q.get("category_hint") or q.get("category", "Uncategorized")
 
         similar_qas = _find_similar_qas(
             q["question_text"], category, knowledge_base, client_name
@@ -608,9 +623,15 @@ async def match_and_fill_async(
 
         base_info_text = _find_base_info_azure(category, q["question_text"])
         if not base_info_text:
-            for key in category_to_base.get(category, []):
-                if key in base_info:
-                    base_info_text += f"\n--- {key} ---\n{base_info[key]}\n"
+            matched_keys = category_to_base.get(category, [])
+            if matched_keys:
+                for key in matched_keys:
+                    if key in base_info:
+                        base_info_text += f"\n--- {key} ---\n{base_info[key]}\n"
+            else:
+                # No category match — include ALL base info so LLM has full context
+                for key, val in base_info.items():
+                    base_info_text += f"\n--- {key} ---\n{val}\n"
 
         past_qa_text = ""
         if similar_qas:
@@ -635,14 +656,15 @@ INSTRUCTIONS:
 2. If similar (but not identical) past Q&A pairs are available, adapt the most relevant answer to fit this specific question.
 3. If an existing answer is provided and is consistent with the base info and past Q&As, you may reuse it.
 4. If base company information is available, use it to construct an accurate answer.
-5. DO NOT fabricate, or hallucinate any facts, statistics, certifications, policy details, or any specifics not present in the provided context. If the context does not contain enough information to answer confidently, respond with "[NEEDS REVIEW]" followed by your best attempt using only what is provided.
+5. DO NOT fabricate, or hallucinate any facts, statistics, certifications, policy details, or any specifics not present in the provided context. If the context does not contain enough information to answer the question, return an empty string for the answer and set confidence to 0.
 6. Keep the tone professional and consistent with a healthcare consulting firm.
 7. Be concise but thorough. Match the expected level of detail.
-8. Add a citation for all the sources you used from the provided context
+8. Do NOT prefix the answer with "[NEEDS REVIEW]" or any similar tag — use the confidence score to signal uncertainty.
+9. Add a citation for all the sources you used from the provided context
 
 Respond with ONLY a JSON object:
 {{
-  "answer": "your answer text",
+  "answer": "your answer text (or empty string if you cannot answer)",
   "confidence": 0.0-1.0,
   "citation":"cite sources used in this answer for ex: filename, section heading/sheet name, cell name etc",
   "sources": ["list of sources used"]
