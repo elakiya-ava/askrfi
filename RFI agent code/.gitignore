@@ -18,7 +18,6 @@ Thumbs.db
 
 # Documentation (kept locally, not in repo)
 docs/
-!docs/HANDOFF*.md
-!docs/test-*.md
 CHANGELOG.md
 PRD.md
+HANDOFF*.md
