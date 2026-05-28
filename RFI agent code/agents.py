@@ -1,9 +1,9 @@
 """
 RFI pipeline functions that process RFI questions.
 
-classify_questions — keyword-based categorization (no LLM)
-match_and_fill    — retrieves similar past Q&A + generates answers via LLM
-review_answers    — checks consistency across answers via LLM
+match_and_fill       — retrieves similar past Q&A + generates answers via LLM
+match_and_fill_async — async concurrent version (for CLI/TUI)
+review_answers       — checks consistency across answers via LLM
 
 Retrieval uses Azure AI Search when configured, JSON fallback otherwise.
 LLM provider is configurable via LLM_PROVIDER env var (anthropic or openai).
@@ -87,23 +87,7 @@ def _llm_call(
             f"Supported: 'anthropic', 'openai', 'azure_openai'"
         )
 
-CATEGORIES = [
-    "Company Information",
-    "Commercial Information",
-    "Compliance",
-    "Legal",
-    "Data & Information Security",
-    "ESG",
-    "People Information",
-    "Suppliers & Freelancers",
-    "Technology & AI",
-]
 
-
-def _get_client() -> Anthropic:
-    """Legacy — kept for backward compat. Prefer _llm_call() for new code."""
-    from anthropic import Anthropic
-    return Anthropic(api_key=os.environ.get("LLM_API_KEY") or os.environ.get("ANTHROPIC_API_KEY"))
 
 
 # ─── AZURE AI SEARCH + EMBEDDING HELPERS ────────────────────────────────────
@@ -154,89 +138,6 @@ def _azure_configured() -> bool:
     return False
 
 
-# ─── CLASSIFIER (keyword-based, no LLM) ─────────────────────────────────────
-
-# Keyword → category mapping for questions that lack a category_hint
-_KEYWORD_MAP = {
-    "Company Information": [
-        "company name", "registration", "headquarters", "founded", "ownership",
-        "parent company", "subsidiary", "office location", "address",
-        "company overview", "organizational", "organisation", "about your",
-    ],
-    "Commercial Information": [
-        "revenue", "pricing", "rate card", "fee", "cost", "budget",
-        "client list", "case study", "portfolio", "capabilities",
-        "pitch", "credentials", "experience", "award", "therapeutic area",
-        "brand", "campaign", "creative",
-    ],
-    "Compliance": [
-        "compliance", "audit", "regulatory", "gdpr", "hipaa", "sox",
-        "anti-bribery", "anti-corruption", "code of conduct", "ethics",
-        "pharmacovigilance", "adverse event", "veeva", "mlr", "approval process",
-    ],
-    "Legal": [
-        "legal", "litigation", "lawsuit", "contract", "liability",
-        "indemnity", "insurance", "intellectual property", "patent",
-        "terms and conditions", "nda", "confidentiality agreement",
-    ],
-    "Data & Information Security": [
-        "data security", "information security", "cyber", "encryption",
-        "penetration test", "iso 27001", "soc 2", "breach", "firewall",
-        "access control", "password", "mfa", "two-factor", "data protection",
-        "data privacy", "backup", "disaster recovery", "incident response",
-    ],
-    "ESG": [
-        "esg", "environmental", "sustainability", "carbon", "diversity",
-        "inclusion", "dei", "social responsibility", "csr", "governance",
-        "net zero", "climate", "waste", "recycling", "renewable",
-    ],
-    "People Information": [
-        "employee", "headcount", "staff", "team size", "fte",
-        "training", "turnover", "retention", "hr ", "human resources",
-        "recruitment", "onboarding", "benefits", "wellbeing", "welfare",
-    ],
-    "Suppliers & Freelancers": [
-        "supplier", "subcontract", "freelance", "third party", "third-party",
-        "vendor", "outsourc", "partner", "agency", "contractor",
-    ],
-    "Technology & AI": [
-        "technology", "software", "platform", "tool", "ai ", "artificial intelligence",
-        "machine learning", "automation", "digital", "cloud", "saas",
-        "infrastructure", "it ", "system", "database",
-    ],
-}
-
-
-def classify_questions(questions: list[dict]) -> list[dict]:
-    """
-    Classify each question into one of 9 categories using:
-      1. The category_hint from sheet names (if valid)
-      2. Keyword matching on the question text (fallback)
-    No LLM call — pure keyword heuristic.
-    """
-    for q in questions:
-        hint = (q.get("category_hint") or "").strip()
-
-        # If the parser already gave a valid hint, use it
-        if hint in CATEGORIES:
-            q["category"] = hint
-            continue
-
-        # Keyword match against question text
-        text_lower = q["question_text"].lower()
-        best_cat = "Uncategorized"
-        best_score = 0
-        for cat, keywords in _KEYWORD_MAP.items():
-            score = sum(1 for kw in keywords if kw in text_lower)
-            if score > best_score:
-                best_score = score
-                best_cat = cat
-
-        q["category"] = best_cat
-
-    return questions
-
-
 # ─── AGENT 2: MATCHER + FILLER ──────────────────────────────────────────────
 
 def _find_similar_qas_azure(
@@ -255,10 +156,7 @@ def _find_similar_qas_azure(
     index_name = os.environ.get("AZURE_SEARCH_QUESTION_INDEX", "rfi-questions")
     search_client = _get_search_client(index_name)
 
-    # Build filter — category is always applied
-    search_filter = f"category eq '{category}'"
-
-    # Hybrid query: keyword + vector + semantic ranker
+    # Hybrid query: keyword + vector + semantic ranker (no category filter)
     vector_query = VectorizedQuery(
         vector=embedding,
         k_nearest_neighbors=50,
@@ -268,7 +166,6 @@ def _find_similar_qas_azure(
     search_kwargs = {
         "search_text": question,
         "vector_queries": [vector_query],
-        "filter": search_filter,
         "top": max_results,
     }
 
@@ -384,14 +281,13 @@ def _find_base_info_azure(category: str, question: str) -> str:
 
         vector_query = VectorizedQuery(
             vector=embedding,
-            k_nearest_neighbors=20,
+            k_nearest_neighbors=50,
             fields="embedding",
         )
 
         results = search_client.search(
             search_text=question,
             vector_queries=[vector_query],
-            filter=f"category eq '{category}'",
             top=5,
         )
 
@@ -412,14 +308,23 @@ def _find_base_info_azure(category: str, question: str) -> str:
 
 def match_and_fill(
     questions: list[dict],
-    knowledge_base: dict,
-    base_info: dict[str, str],
+    knowledge_base: dict | None = None,
+    base_info: dict[str, str] | None = None,
     client_name: str = "",
 ) -> list[dict]:
     """
     For each question, find similar past answers and generate a response.
     Adds 'generated_answer', 'confidence', and 'source_references' to each question.
+
+    knowledge_base and base_info are lazy-loaded if not provided.
     """
+    # Lazy-load if not provided
+    if knowledge_base is None:
+        from indexer import load_knowledge_base
+        knowledge_base = load_knowledge_base()
+    if base_info is None:
+        from base_info_parser import load_base_info
+        base_info = load_base_info()
 
     # Map category names to base info keys
     category_to_base = {
@@ -647,4 +552,136 @@ If no issues found, respond with {{"contradictions": [], "flags": []}}
         if "review_status" not in q:
             q["review_status"] = "unreviewed"
 
+    return questions
+
+
+# ─── ASYNC FILL (for CLI/TUI with concurrency) ──────────────────────────────
+
+async def match_and_fill_async(
+    questions: list[dict],
+    knowledge_base: dict | None = None,
+    base_info: dict[str, str] | None = None,
+    client_name: str = "",
+    max_concurrent: int = 5,
+    on_progress=None,
+) -> list[dict]:
+    """
+    Async concurrent version of match_and_fill.
+    Fills questions with up to max_concurrent parallel LLM calls.
+    Calls on_progress(q) after each question is filled (if provided).
+    """
+    import asyncio
+    import concurrent.futures
+
+    # Lazy-load if not provided
+    if knowledge_base is None:
+        from indexer import load_knowledge_base
+        knowledge_base = load_knowledge_base()
+    if base_info is None:
+        from base_info_parser import load_base_info
+        base_info = load_base_info()
+
+    # Category → base info key mapping
+    category_to_base = {
+        "Company Information": ["Company Information"],
+        "Commercial Information": ["Commercial Information (General)"],
+        "Compliance": ["Compliance"],
+        "Legal": [],
+        "Data & Information Security": ["Data, information security, and client confidentiality"],
+        "ESG": ["Environmental, social, and governance"],
+        "People Information": ["People Information"],
+        "Suppliers & Freelancers": ["Suppliers and freelancers"],
+        "Technology & AI": ["Technology and AI"],
+    }
+
+    semaphore = asyncio.Semaphore(max_concurrent)
+    loop = asyncio.get_event_loop()
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=max_concurrent)
+
+    def _fill_one(q: dict) -> None:
+        """Sync function that fills a single question (runs in thread)."""
+        category = q.get("category", q.get("category_hint", "Uncategorized"))
+
+        similar_qas = _find_similar_qas(
+            q["question_text"], category, knowledge_base, client_name
+        )
+
+        base_info_text = _find_base_info_azure(category, q["question_text"])
+        if not base_info_text:
+            for key in category_to_base.get(category, []):
+                if key in base_info:
+                    base_info_text += f"\n--- {key} ---\n{base_info[key]}\n"
+
+        past_qa_text = ""
+        if similar_qas:
+            past_qa_text = "\n\nPast Q&A pairs from similar RFIs:\n"
+            for i, qa in enumerate(similar_qas):
+                past_qa_text += f"\n[Past Q{i+1} | Client: {qa['client']} | Source: {qa['source']}]\n"
+                past_qa_text += f"Q: {qa['question']}\n"
+                past_qa_text += f"A: {qa['answer']}\n"
+
+        prompt = f"""You are filling out an RFI (Request for Information) for Avalere Health, a healthcare consulting firm.
+
+QUESTION (Category: {category}):
+{q['question_text']}
+
+{f"EXISTING ANSWER (from previous submission): {q.get('existing_answer', '')}" if q.get('existing_answer') else "No existing answer."}
+
+{f"BASE COMPANY INFORMATION:{base_info_text}" if base_info_text else "No base info available for this category."}
+{past_qa_text if past_qa_text else "No similar past Q&A pairs found."}
+
+INSTRUCTIONS:
+1. If a past Q&A question is nearly identical to this question, reuse that past answer verbatim.
+2. If similar (but not identical) past Q&A pairs are available, adapt the most relevant answer to fit this specific question.
+3. If an existing answer is provided and is consistent with the base info and past Q&As, you may reuse it.
+4. If base company information is available, use it to construct an accurate answer.
+5. DO NOT fabricate, or hallucinate any facts, statistics, certifications, policy details, or any specifics not present in the provided context. If the context does not contain enough information to answer confidently, respond with "[NEEDS REVIEW]" followed by your best attempt using only what is provided.
+6. Keep the tone professional and consistent with a healthcare consulting firm.
+7. Be concise but thorough. Match the expected level of detail.
+8. Add a citation for all the sources you used from the provided context
+
+Respond with ONLY a JSON object:
+{{
+  "answer": "your answer text",
+  "confidence": 0.0-1.0,
+  "citation":"cite sources used in this answer for ex: filename, section heading/sheet name, cell name etc",
+  "sources": ["list of sources used"]
+}}
+"""
+        try:
+            text = _llm_call(
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.1,
+                max_tokens=2048,
+            )
+            if text.startswith("```"):
+                text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+
+            result = json.loads(text)
+            q["generated_answer"] = result.get("answer", "")
+            q["confidence"] = min(max(float(result.get("confidence", 0)), 0), 1.0)
+            q["citation"] = result.get("citation", "")
+            q["source_references"] = result.get("sources", [])
+            q["fill_status"] = "filled"
+
+        except Exception as e:
+            q["generated_answer"] = f"[ERROR] Could not generate answer: {e}"
+            q["confidence"] = 0.0
+            q["citation"] = ""
+            q["source_references"] = []
+            q["fill_status"] = "error"
+
+    async def _fill_with_semaphore(q: dict) -> None:
+        async with semaphore:
+            q["fill_status"] = "filling"
+            if on_progress:
+                await on_progress(q)
+            await loop.run_in_executor(executor, _fill_one, q)
+            if on_progress:
+                await on_progress(q)
+
+    tasks = [_fill_with_semaphore(q) for q in questions]
+    await asyncio.gather(*tasks)
+
+    executor.shutdown(wait=False)
     return questions

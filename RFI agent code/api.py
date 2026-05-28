@@ -215,41 +215,13 @@ async def fill_questions(session_id: str):
         questions = session["questions"]
         client_name = session["client_name"]
 
-        # Progress callback — fires when each question status changes
-        async def on_progress(q: dict):
-            yield {
-                "event": "progress",
-                "data": json.dumps({
-                    "index": questions.index(q),
-                    "status": q.get("fill_status", "pending"),
-                    "generated_answer": q.get("generated_answer", ""),
-                    "confidence": q.get("confidence"),
-                    "citation": q.get("citation", ""),
-                    "source_references": q.get("source_references", []),
-                }),
-            }
-
-        # We can't pass a generator-yielding callback directly to match_and_fill.
-        # Instead, use a queue to bridge progress events to SSE.
         progress_queue: asyncio.Queue = asyncio.Queue()
-
-        async def progress_callback(q: dict):
-            await progress_queue.put(q)
-
-        # Run fill in background task (sync function wrapped in executor)
         loop = asyncio.get_event_loop()
 
         async def run_fill():
-            # match_and_fill is sync and doesn't support on_progress callback
-            # Run it in executor and post all results at once
-            from indexer import load_knowledge_base
-            from base_info_parser import load_base_info
-            knowledge_base = load_knowledge_base()
-            base_info = load_base_info()
             filled = await loop.run_in_executor(
-                None, match_and_fill, questions, knowledge_base, base_info, client_name
+                None, match_and_fill, questions, None, None, client_name
             )
-            # Update session questions and push progress for each
             for i, q in enumerate(filled):
                 questions[i].update(q)
                 questions[i]["fill_status"] = "filled"
@@ -478,6 +450,31 @@ async def download_csv(session_id: str):
         output_path,
         media_type="text/csv",
         filename=f"{basename}_FILLED.csv",
+    )
+
+
+@app.get("/api/download-pdf/{session_id}")
+async def download_pdf(session_id: str):
+    """Generate and download the filled RFI as a PDF report."""
+    session = _sessions.get(session_id)
+    if not session:
+        raise HTTPException(404, "Session not found")
+
+    if session["status"] not in ("filled", "reviewed"):
+        raise HTTPException(400, "Questions must be filled before download")
+
+    try:
+        output_path = _generate_pdf(
+            session["questions"], session["file_name"], session["client_name"]
+        )
+    except Exception as e:
+        raise HTTPException(500, f"Failed to generate PDF: {e}")
+
+    basename = Path(session["file_name"]).stem
+    return FileResponse(
+        output_path,
+        media_type="application/pdf",
+        filename=f"{basename}_FILLED.pdf",
     )
 
 

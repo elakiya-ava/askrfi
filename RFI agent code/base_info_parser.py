@@ -74,6 +74,30 @@ def parse_base_info(base_info_dir: str, output_dir: str) -> dict[str, str]:
     return results
 
 
+def load_base_info(base_info_dir: str | None = None) -> dict[str, str]:
+    """
+    Load all pre-parsed base info .txt files into memory.
+    Returns {category_name: text_content}.
+    """
+    if base_info_dir is None:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        base_info_dir = os.path.join(script_dir, "data", "base_info")
+
+    if not os.path.isdir(base_info_dir):
+        return {}
+
+    results = {}
+    for fname in sorted(os.listdir(base_info_dir)):
+        if not fname.endswith(".txt"):
+            continue
+        fpath = os.path.join(base_info_dir, fname)
+        name = os.path.splitext(fname)[0]
+        with open(fpath, "r", encoding="utf-8") as f:
+            results[name] = f.read()
+
+    return results
+
+
 if __name__ == "__main__":
     script_dir = os.path.dirname(os.path.abspath(__file__))
     base_info_dir = os.path.join(script_dir, "..", "..", "base info")

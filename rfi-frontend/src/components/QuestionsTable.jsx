@@ -48,7 +48,10 @@ function QuestionsTable({ questions }) {
                         </div>
                       )}
                       {q.status === 'filled' && (
-                        <div className="generated-answer">{q.generated_answer}</div>
+                        <div className="generated-answer">
+                          {q.generated_answer}
+                          <div className="char-count">{q.generated_answer.length} chars</div>
+                        </div>
                       )}
                       {q.status === 'pending' && (
                         <div className="pending-placeholder">—</div>

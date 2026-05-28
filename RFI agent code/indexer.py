@@ -21,14 +21,29 @@ from dataclasses import asdict
 from excel_parser import parse_rfi, extract_client_from_filename, RFIQuestion
 
 
+# ─── Default paths ───────────────────────────────────────────────────────────
+
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+_DATA_DIR = os.path.join(_SCRIPT_DIR, "data")
+_KB_PATH = os.path.join(_DATA_DIR, "knowledge_base.json")
+
+
+def load_knowledge_base(path: str | None = None) -> dict:
+    """Load the JSON knowledge base from disk. Returns empty dict if not found."""
+    kb_path = path or _KB_PATH
+    if not os.path.exists(kb_path):
+        return {"by_category": {}, "rfis": [], "stats": {}}
+    with open(kb_path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
 def _azure_configured() -> bool:
-    """Check if Azure AI Search env vars are set."""
-    return bool(
-        os.environ.get("AZURE_SEARCH_ENDPOINT")
-        and os.environ.get("AZURE_SEARCH_API_KEY")
-        and os.environ.get("AZURE_OPENAI_ENDPOINT")
-        and os.environ.get("AZURE_OPENAI_API_KEY")
-    )
+    """Check if Azure AI Search env vars are set (delegates to agents module)."""
+    from agents import _azure_configured as _ac
+    try:
+        return _ac()
+    except EnvironmentError:
+        return False
 
 
 def _index_to_azure(knowledge_base: dict, base_info_dir: str) -> None:
@@ -109,7 +124,7 @@ def _index_to_azure(knowledge_base: dict, base_info_dir: str) -> None:
         functions=[
             TagScoringFunction(
                 field_name="client",
-                boost=3,
+                boost=1.5,
                 parameters=TagScoringParameters(tags_parameter="clientName"),
             ),
         ],

@@ -104,9 +104,11 @@ def stats():
 def fill(rfi_path: str, client: str, output_dir: str, interactive: bool, concurrency: int):
     """Fill a new RFI with answers from the knowledge base."""
 
-    # Validate
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        click.echo("ERROR: ANTHROPIC_API_KEY not set. Add it to .env or export it.")
+    # Validate LLM key is set for the configured provider
+    provider = os.environ.get("LLM_PROVIDER", "anthropic").lower()
+    llm_key = os.environ.get("LLM_API_KEY") or os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    if not llm_key:
+        click.echo(f"ERROR: No LLM API key found. Set LLM_API_KEY (or ANTHROPIC_API_KEY/OPENAI_API_KEY) in .env")
         sys.exit(1)
 
     # Check Azure is configured (required for retrieval)

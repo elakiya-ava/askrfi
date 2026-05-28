@@ -188,10 +188,11 @@ rfi-agent stats
 - Confidence scoring + color-coded output
 - CLI interface
 - Summary report generation
+- Web UI with live fill progress, per-answer character count display
+- PDF / CSV / Excel download
 
 ### Out of Scope (v2+)
 - SharePoint API integration
-- Web UI
 - .docx / .pptx parsing
 - Feedback loop (consultant corrections → update vector store)
 - Graph RAG / entity extraction

@@ -303,6 +303,14 @@ body {
 /* Answer cell */
 .generated-answer {
   line-height: 1.5;
+  position: relative;
+}
+
+.char-count {
+  text-align: right;
+  font-size: 11px;
+  color: #9ca3af;
+  margin-top: 4px;
 }
 
 .pending-placeholder {
